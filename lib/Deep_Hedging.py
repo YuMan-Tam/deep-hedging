@@ -23,7 +23,7 @@ class Deep_Hedging:
 		self.day_count_in_a_year = N/maturity
 		
 	def model(self, strategy_type = None, \
-					is_trainable=None, is_training = None, \
+					is_trainable=True, is_training = True, \
 					epsilon = 0.0, initial_wealth = 0.0, \
 					loss_type = None, **kwargs):
 		# The state variables.
