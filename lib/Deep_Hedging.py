@@ -29,6 +29,7 @@ class Deep_Hedging:
 		# The state variables.
 		prc = Input(shape=(self.num_asset,), name = "prc_0")
 		information_set = Input(shape=(self.num_asset,), name = "information_set_0")
+		information_set
 		
 		# The control variable is the hedging strategy and
 		# certainty equivalent.
