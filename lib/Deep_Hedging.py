@@ -11,7 +11,7 @@ from Loss_Metrics import Loss_Metrics
 
 seed = None
 class Deep_Hedging:
-	def __init__ (self, num_asset = None, N = None, d = None, m = None, \
+	def __init__ (self, num_asset = 1, N = None, d = None, m = None, \
 					risk_free = None, maturity = None):
 		self.num_asset = num_asset
 		self.N = N
