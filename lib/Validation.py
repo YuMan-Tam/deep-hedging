@@ -23,10 +23,7 @@ class Validation:
 		return instrument
 		
 	def get_risk_neutral_PV(self, verbose = True):
-		risk_neutral_price = -np.mean(self.data[-1])
-		if verbose:
-			print("The risk neutral price for the European call is {0}.".format(risk_neutral_price))
-		return risk_neutral_price
+		return -np.mean(self.data[-1])
 		
 	def get_model_PV(self, instrument=None):
 		return instrument.NPV()
