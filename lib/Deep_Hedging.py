@@ -1,34 +1,30 @@
 from tensorflow.keras.layers import Input, Dense, Concatenate, Subtract, \
-							Lambda, Add, Dot, \
-							BatchNormalization, LeakyReLU, ReLU
+							Lambda, Add, Dot, BatchNormalization, LeakyReLU
 from tensorflow.keras.models import Model
 from tensorflow.keras.constraints import MaxNorm
 from tensorflow.keras.initializers import he_normal, Zeros
 import tensorflow.keras.backend as K
 import tensorflow as tf
 import numpy as np
+
 from Loss_Metrics import Loss_Metrics
 
-seed = None
 class Deep_Hedging:
-	def __init__ (self, num_asset = 1, N = None, d = None, m = None, \
-					risk_free = None, maturity = None):
-		self.num_asset = num_asset
+	def __init__ (self, N = None, d = None, m = None, \
+									risk_free = None, maturity = None, \
+									num_days_in_a_year = 365):
 		self.N = N
 		self.d = d
 		self.m = m
 		self.maturity = maturity
 		self.risk_free = risk_free
 		
-		self.day_count_in_a_year = N/maturity
+		self.num_days_in_a_year = num_days_in_a_year
 		
-	def model(self, strategy_type = None, \
-					is_trainable=True, is_training = True, \
-					epsilon = 0.0, initial_wealth = 0.0, \
-					loss_type = None, **kwargs):
-		# The state variables.
-		prc = Input(shape=(self.num_asset,), name = "prc_0")
-		information_set = Input(shape=(self.num_asset,), name = "information_set_0")
+	def model(self, strategy_type = None, epsilon = 0.0, loss_type = None, **kwargs):
+		# State variables.
+		prc = Input(shape=(1,), name = "prc_0")
+		information_set = Input(shape=(1,), name = "information_set_0")
 		
 		# The control variable is the hedging strategy and
 		# certainty equivalent.
@@ -56,10 +52,9 @@ class Deep_Hedging:
 							   name = "dense_" + str(i)+ "_" + str(j))(helper1)
 							   
 						# Batch normalization.                       
-						layers[i+(j)*self.d] = BatchNormalization(momentum = 0.99, \
-																	name= "BatchNorm_" + str(i)+ "_" + str(j), \
-																	trainable=is_trainable \
-													)(layers[i+(j)*self.d], training=is_training)
+						layers[i+(j)*self.d] = BatchNormalization(momentum = 0.99, trainable=True, \
+																	name= "BatchNorm_" + str(i)+ "_" + str(j) \
+													)(layers[i+(j)*self.d], training=True)
 						strategyhelper = LeakyReLU(name= "Activation_" + str(i)+ "_" + str(j),)(layers[i+(j)*self.d])               
 					elif i != self.d-1:
 						layers[i+(j)*self.d] = Dense(self.m,
@@ -68,13 +63,12 @@ class Deep_Hedging:
 							   name = "dense_" + str(i)+ "_" + str(j))(strategyhelper)
 						
 						# Batch normalization                        
-						layers[i+(j)*self.d] = BatchNormalization(momentum = 0.99, \
-																	name= "BatchNorm_" + str(i)+ "_" + str(j), \
-																	trainable=is_trainable \
-													)(layers[i+(j)*self.d], training=is_training)
+						layers[i+(j)*self.d] = BatchNormalization(momentum = 0.99, trainable=True, \
+																	name= "BatchNorm_" + str(i)+ "_" + str(j)
+													)(layers[i+(j)*self.d], training=True)
 						strategyhelper = LeakyReLU(name= "Activation_" + str(i)+ "_" + str(j))(layers[i+(j)*self.d])
 					else:
-						strategyhelper = Dense(self.num_asset,
+						strategyhelper = Dense(1,
 						   activation="linear",
 						   kernel_initializer=he_normal(),
 						   use_bias=True, 
@@ -93,7 +87,7 @@ class Deep_Hedging:
 				costs = Lambda(lambda x : epsilon*x, name = "cost_" + str(j))(costs)
 				
 				if j == 0:
-					wealth = Subtract(name = "costDot_" + str(j))([tf.constant(initial_wealth,shape=(1,)), costs])
+					wealth = Subtract(name = "costDot_" + str(j))([tf.constant(0.0,shape=(1,)), costs])
 				else:
 					wealth = Subtract(name = "costDot_" + str(j))([wealth, costs])
 				
@@ -104,11 +98,11 @@ class Deep_Hedging:
 				wealth = Subtract(name = "wealth_" + str(j))([wealth, mult])
  
 				# Accumulate interest rate for next period.
-				FV_factor = np.exp(self.risk_free/self.day_count_in_a_year)
+				FV_factor = np.exp(self.risk_free/self.num_days_in_a_year)
 				wealth = Lambda(lambda x: x*FV_factor)(wealth)
 				
-				prc = Input(shape=(self.num_asset,),name = "prc_" + str(j+1))
-				information_set = Input(shape=(self.num_asset,), name = "information_set_" + str(j+1))
+				prc = Input(shape=(1,),name = "prc_" + str(j+1))
+				information_set = Input(shape=(1,), name = "information_set_" + str(j+1))
 				
 				strategy = strategyhelper    
 				
