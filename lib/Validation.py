@@ -4,12 +4,11 @@ import numpy as np
 from Utilities import reshape_1D
 
 class Validation:
-	def __init__(self, model = None, data = None, process = None):
+	def __init__(self, model = None, data = None, N = None, process = None):
 		self.model = model
 		self.data = data
 		self.process = process
-		self.N = int((len(data) - 2 - 1)/2) # Subtract two dimension for w and payoff, 
-									   # and the last day for the information set.
+		self.N = N
 		
 	def get_instrument(self, name = None, calculation_date = ql.Date.todaysDate(), **kwargs):
 		if name is "European_Call":
@@ -17,9 +16,7 @@ class Validation:
 			exercise_date = ql.EuropeanExercise(kwargs["maturity_date"])
 			instrument = ql.VanillaOption(ql_payoff, exercise_date)
 
-		if type(self.process).__name__ is "HestonProcess":
-			engine = ql.AnalyticHestonEngine(ql.HestonModel(self.process.get_process(calculation_date)))
-		elif type(self.process).__name__ is "BlackScholesProcess":
+		if type(self.process).__name__ is "BlackScholesProcess":
 			engine = ql.AnalyticEuropeanEngine(self.process.get_process(calculation_date))
 			
 		instrument.setPricingEngine(engine)
