@@ -1,5 +1,6 @@
 import QuantLib as ql
 import numpy as np
+from tqdm import trange
 
 # References:
 # https://www.implementingquantlib.com/2014/06/chapter-6-part-5-of-8-path-generators.html
@@ -44,7 +45,7 @@ class BlackScholesProcess:
 		
 		value = np.zeros((num_paths, time_step+1))
 		
-		for i in range(num_paths):
+		for i in trange(num_paths):
 			sample_path = seq.next()
 			path = sample_path.value()
 			value[i, :] = np.array(path[0])
