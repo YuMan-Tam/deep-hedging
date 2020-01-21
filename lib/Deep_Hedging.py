@@ -1,5 +1,5 @@
 from tensorflow.keras.layers import Input, Dense, Concatenate, Subtract, \
-							Lambda, Add, Dot, BatchNormalization, LeakyReLU
+				Lambda, Add, Dot, BatchNormalization, LeakyReLU
 from tensorflow.keras.models import Model
 from tensorflow.keras.constraints import MaxNorm
 from tensorflow.keras.initializers import he_normal, Zeros
@@ -11,8 +11,8 @@ from Loss_Metrics import Loss_Metrics
 
 class Deep_Hedging:
 	def __init__ (self, N = None, d = None, m = None, \
-									risk_free = None, maturity = None, \
-									num_days_in_a_year = 365):
+			risk_free = None, maturity = None, \
+			num_days_in_a_year = 365):
 		self.N = N
 		self.d = d
 		self.m = m
