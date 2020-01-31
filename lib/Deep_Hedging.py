@@ -47,7 +47,7 @@ class Deep_Hedging:
 				for i in range(self.d):
 					if i == 0:
 						layers[i+(j)*self.d] = Dense(self.m,
-							   kernel_initializer=he_normal(),
+							   kernel_initializer=Zeros(),
 							   use_bias=False, 
 							   name = "dense_" + str(i)+ "_" + str(j))(helper1)
 							   
@@ -58,7 +58,7 @@ class Deep_Hedging:
 						strategyhelper = LeakyReLU(name= "Activation_" + str(i)+ "_" + str(j),)(layers[i+(j)*self.d])               
 					elif i != self.d-1:
 						layers[i+(j)*self.d] = Dense(self.m,
-							   kernel_initializer=he_normal(),
+							   kernel_initializer=Zeros(),
 							   use_bias=False,
 							   name = "dense_" + str(i)+ "_" + str(j))(strategyhelper)
 						
@@ -70,7 +70,7 @@ class Deep_Hedging:
 					else:
 						strategyhelper = Dense(1,
 						   activation="linear",
-						   kernel_initializer=he_normal(),
+						   kernel_initializer=Zeros(),
 						   use_bias=True, 
 						   name = "dense_" + str(i)+ "_" + str(j))(strategyhelper)
 						   
