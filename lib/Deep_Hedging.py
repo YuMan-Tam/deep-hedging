@@ -113,7 +113,7 @@ class Deep_Hedging:
 			else:
 				# The paper assumes no transaction costs for the final period 
 				# when the position is liquidated.
-				final_period_cost = True
+				final_period_cost = False
 				if final_period_cost:
 					# Proportional transaction cost
 					absolutechanges = Lambda(lambda x : K.abs(x), name = "absolutechanges_" + str(j))(strategy)
