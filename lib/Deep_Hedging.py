@@ -2,14 +2,14 @@ from tensorflow.keras.layers import Input, Dense, Concatenate, Subtract, \
 				Lambda, Add, Dot, BatchNormalization, LeakyReLU
 from tensorflow.keras.models import Model
 from tensorflow.keras.constraints import MaxNorm
-from tensorflow.keras.initializers import he_normal, Zeros, TruncatedNormal,he_uniform
+from tensorflow.keras.initializers import he_normal, Zeros, TruncatedNormal, he_uniform
 import tensorflow.keras.backend as K
 import tensorflow as tf
 import numpy as np
 
 from Loss_Metrics import Loss_Metrics
 
-default_kernal_initializer=TruncatedNormal()
+default_kernel_initializer = TruncatedNormal()
 class Deep_Hedging:
 	def __init__ (self, N = None, d = None, m = None, \
 			risk_free = None, maturity = None, \
@@ -48,7 +48,7 @@ class Deep_Hedging:
 				for i in range(self.d):
 					if i == 0:
 						layers[i+(j)*self.d] = Dense(self.m,
-							   kernel_initializer=default_kernal_initializer,
+							   kernel_initializer=default_kernel_initializer,
 							   use_bias=False, 
 							   name = "dense_" + str(i)+ "_" + str(j))(helper1)
 							   
@@ -59,7 +59,7 @@ class Deep_Hedging:
 						strategyhelper = LeakyReLU(name= "Activation_" + str(i)+ "_" + str(j),)(layers[i+(j)*self.d])               
 					elif i != self.d-1:
 						layers[i+(j)*self.d] = Dense(self.m,
-							   kernel_initializer=default_kernal_initializer,
+							   kernel_initializer=default_kernel_initializer,
 							   use_bias=False,
 							   name = "dense_" + str(i)+ "_" + str(j))(strategyhelper)
 						
@@ -71,7 +71,7 @@ class Deep_Hedging:
 					else:
 						strategyhelper = Dense(1,
 						   activation="linear",
-						   kernel_initializer=default_kernal_initializer,
+						   kernel_initializer=default_kernel_initializer,
 						   use_bias=True, 
 						   name = "dense_" + str(i)+ "_" + str(j))(strategyhelper)
 						   
