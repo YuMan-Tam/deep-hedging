@@ -9,8 +9,10 @@ class Validation:
 		self.data = data
 		self.process = process
 		self.N = N
+		self.original_s0 = process.s0
 		
 	def get_instrument(self, name = None, calculation_date = ql.Date.todaysDate(), **kwargs):
+		process.s0 = self.original_s0
 		if name is "European_Call":
 			ql_payoff = ql.PlainVanillaPayoff(ql.Option.Call, kwargs["strike"])
 			exercise_date = ql.EuropeanExercise(kwargs["maturity_date"])
