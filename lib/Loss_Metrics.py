@@ -5,7 +5,7 @@ class Loss_Metrics:
 	def __init__(self, wealth = None, w = None):
 		self.wealth=wealth
 		self.w=w
-		
+
 	def CVaR(self,loss_param = None):
 		alpha = loss_param
 		
