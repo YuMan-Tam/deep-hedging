@@ -12,23 +12,24 @@ seed = 0
 
 # Geometric Brownian Motion.
 class BlackScholesProcess:
-	def __init__(self,s0 = None, sigma = None, risk_free = None, dividend = None):
+	def __init__(self,s0 = None, sigma = None, risk_free = None, \
+					dividend = None, day_count = None):
 		self.s0 = s0
 		self.sigma = sigma
 		self.risk_free = risk_free
 		self.dividend = dividend
-
+		self.day_count = day_count
+		
 	def get_process(self, calculation_date = ql.Date.todaysDate()):
-		day_count = ql.Actual365Fixed()
 		spot_handle = ql.QuoteHandle(ql.SimpleQuote(self.s0))
 		rf_handle = ql.QuoteHandle(ql.SimpleQuote(self.risk_free))
 		dividend_handle = ql.QuoteHandle(ql.SimpleQuote(self.dividend))
 		
-		volatility = ql.BlackConstantVol(0, ql.NullCalendar(),self.sigma,day_count)
+		volatility = ql.BlackConstantVol(0, ql.NullCalendar(),self.sigma,self.day_count)
 		
 		# Assume flat term-structure.
-		flat_ts = ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), rf_handle, day_count))
-		dividend_yield = ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), dividend_handle, day_count))
+		flat_ts = ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), rf_handle, self.day_count))
+		dividend_yield = ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), dividend_handle, self.day_count))
 
 		ql.Settings.instance().evaluationDate = calculation_date   
 
