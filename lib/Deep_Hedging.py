@@ -1,15 +1,22 @@
 from tensorflow.keras.layers import Input, Dense, Concatenate, Subtract, \
-				Lambda, Add, Dot, BatchNormalization, LeakyReLU
+				Lambda, Add, Dot, BatchNormalization, Activation, LeakyReLU
 from tensorflow.keras.models import Model
 from tensorflow.keras.constraints import MaxNorm
-from tensorflow.keras.initializers import he_normal, Zeros, TruncatedNormal, he_uniform
+from tensorflow.keras.initializers import he_normal, Zeros, he_uniform, TruncatedNormal
+from tensorflow.keras.activations import tanh, relu, linear
 import tensorflow.keras.backend as K
 import tensorflow as tf
 import numpy as np
 
 from Loss_Metrics import Loss_Metrics
 
-default_kernel_initializer = TruncatedNormal()
+intitalizer_dict = { 
+	"he_normal": he_normal(),
+	"zeros": Zeros(),
+	"he_uniform": he_uniform(),
+	"truncated_normal": TruncatedNormal()
+}
+
 class Deep_Hedging:
 	def __init__ (self, N = None, d = None, m = None, \
 			risk_free = None, maturity = None, \
@@ -22,7 +29,11 @@ class Deep_Hedging:
 		
 		self.num_days_in_a_year = num_days_in_a_year
 		
-	def model(self, strategy_type = None, epsilon = 0.0, loss_type = None, **kwargs):
+	def model(self, inititial_wealth = 0.0, strategy_type = None, \
+							epsilon = 0.0, loss_type = None, \
+							use_batch_norm = True, kernel_initializer = "he_uniform", \
+							activation_dense = "relu", activation_output = "linear", 
+							final_period_cost = False, **kwargs):
 		# State variables.
 		prc = Input(shape=(1,), name = "prc_0")
 		information_set = Input(shape=(1,), name = "information_set_0")
@@ -48,32 +59,47 @@ class Deep_Hedging:
 				for i in range(self.d):
 					if i == 0:
 						layers[i+(j)*self.d] = Dense(self.m,
-							   kernel_initializer=default_kernel_initializer,
-							   use_bias=False, 
+							   kernel_initializer=kernel_initializer,
+							   use_bias=(not use_batch_norm), 
 							   name = "dense_" + str(i)+ "_" + str(j))(helper1)
-							   
-						# Batch normalization.                       
-						layers[i+(j)*self.d] = BatchNormalization(momentum = 0.99, trainable=True, \
-																	name= "BatchNorm_" + str(i)+ "_" + str(j) \
-													)(layers[i+(j)*self.d], training=True)
-						strategyhelper = LeakyReLU(name= "Activation_" + str(i)+ "_" + str(j),)(layers[i+(j)*self.d])               
+						
+						if use_batch_norm:
+							# Batch normalization.
+							layers[i+(j)*self.d] = BatchNormalization(momentum = 0.99, trainable=True, \
+																		name= "BatchNorm_" + str(i)+ "_" + str(j) \
+														)(layers[i+(j)*self.d], training=True)
+						
+						if activation_dense is "leaky_relu":
+							strategyhelper = LeakyReLU(layers[i+(j)*self.d])
+						else:
+							strategyhelper = Activation(activation_dense)(layers[i+(j)*self.d])
+						
 					elif i != self.d-1:
 						layers[i+(j)*self.d] = Dense(self.m,
-							   kernel_initializer=default_kernel_initializer,
-							   use_bias=False,
+							   kernel_initializer=kernel_initializer,
+							   use_bias=(not use_batch_norm),
 							   name = "dense_" + str(i)+ "_" + str(j))(strategyhelper)
 						
-						# Batch normalization                        
-						layers[i+(j)*self.d] = BatchNormalization(momentum = 0.99, trainable=True, \
-																	name= "BatchNorm_" + str(i)+ "_" + str(j)
-													)(layers[i+(j)*self.d], training=True)
-						strategyhelper = LeakyReLU(name= "Activation_" + str(i)+ "_" + str(j))(layers[i+(j)*self.d])
+						if use_batch_norm:
+							# Batch normalization                        
+							layers[i+(j)*self.d] = BatchNormalization(momentum = 0.99, trainable=True, \
+																		name= "BatchNorm_" + str(i)+ "_" + str(j)
+														)(layers[i+(j)*self.d], training=True)
+														
+						if activation_dense is "leaky_relu":
+							strategyhelper = LeakyReLU(layers[i+(j)*self.d])
+						else:
+							strategyhelper = Activation(activation_dense)(layers[i+(j)*self.d])
 					else:
 						strategyhelper = Dense(1,
-						   activation="linear",
-						   kernel_initializer=default_kernel_initializer,
+						   kernel_initializer=kernel_initializer,
 						   use_bias=True, 
 						   name = "dense_" + str(i)+ "_" + str(j))(strategyhelper)
+							 
+						if activation_output is "leaky_relu":
+							strategyhelper = LeakyReLU(name = "delta_" + str(j))(strategyhelper)
+						else:
+							strategyhelper = Activation(activation_output, name = "delta_" + str(j))(strategyhelper)
 						   
 				# strategy_-1 is set to 0
 				# delta_strategy = strategy_{t+1} - strategy_t
@@ -88,7 +114,7 @@ class Deep_Hedging:
 				costs = Lambda(lambda x : epsilon*x, name = "cost_" + str(j))(costs)
 				
 				if j == 0:
-					wealth = Subtract(name = "costDot_" + str(j))([tf.constant(0.0,shape=(1,)), costs])
+					wealth = Subtract(name = "costDot_" + str(j))([tf.constant(inititial_wealth,shape=(1,)), costs])
 				else:
 					wealth = Subtract(name = "costDot_" + str(j))([wealth, costs])
 				
@@ -114,7 +140,6 @@ class Deep_Hedging:
 			else:
 				# The paper assumes no transaction costs for the final period 
 				# when the position is liquidated.
-				final_period_cost = False
 				if final_period_cost:
 					# Proportional transaction cost
 					absolutechanges = Lambda(lambda x : K.abs(x), name = "absolutechanges_" + str(j))(strategy)
@@ -149,7 +174,7 @@ class Deep_Hedging:
 							kernel_initializer=Zeros(),
 							bias_initializer=Zeros(),
 							name = "certainty_equiv")(w)
-					loss = Loss_Metrics(wealth,w).Entropy(kwargs["loss_param"])
+				loss = Loss_Metrics(wealth,w).Entropy(kwargs["loss_param"])
 				
 				model = Model(inputs, outputs=[wealth, w])                    
 				model.add_loss(loss)
