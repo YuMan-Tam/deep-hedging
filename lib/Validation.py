@@ -9,10 +9,8 @@ class Validation:
 		self.data = data
 		self.process = process
 		self.N = N
-		self.original_s0 = process.s0
 		
 	def get_instrument(self, name = None, calculation_date = ql.Date.todaysDate(), **kwargs):
-		self.process.s0 = self.original_s0
 		if name is "European_Call":
 			ql_payoff = ql.PlainVanillaPayoff(ql.Option.Call, kwargs["strike"])
 			exercise_date = ql.EuropeanExercise(kwargs["maturity_date"])
@@ -27,10 +25,17 @@ class Validation:
 	def get_risk_neutral_PV(self, verbose = True):
 		return -np.mean(self.data[-1])
 		
-	def get_model_PV(self, instrument=None):
+	def get_model_PV(self, instrument=None, s0=None, \
+											calculation_date = ql.Date.todaysDate()):
+		process = self.process
+		process.s0 = s0
+			
+		engine = ql.AnalyticEuropeanEngine(process.get_process(calculation_date))
+		instrument.setPricingEngine(engine)
+		
 		return instrument.NPV()
 
-	def get_model_delta(self, instrument, s0 = None, calculation_date = None):
+	def get_model_delta(self, instrument, s0=None, calculation_date = None):
 		process = self.process
 		process.s0 = s0
 			
