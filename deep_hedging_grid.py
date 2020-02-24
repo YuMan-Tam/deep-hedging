@@ -23,13 +23,18 @@ import numpy as np
 import QuantLib as ql
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import matplotlib
+
+# Avoid X11-server IO error.
+# https://matplotlib.org/faq/howto_faq.html
+matplotlib.use('Agg') 
 
 from tqdm import trange, tqdm
 from tqdm.keras import TqdmCallback
 from itertools import repeat
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, load_model
 import tensorflow.keras.backend as K
 
 from Stochastic_Processes import BlackScholesProcess
@@ -41,13 +46,9 @@ from Validation import Validation
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 tf.compat.v1.disable_eager_execution()
 
-# Output directories
-model_data_dir ="./data/"
-fig_dir = "./figure/"
-
 print("\nFinish loading all necessary libraries!\n")
 
-"""**Import all neccessary python, quantitative finance, and machine learning software libraries.**"""
+"""**Import all necessary python, quantitative finance, and machine learning software libraries.**"""
 
 #@title <font color='Blue'>**User Inputs**</font>
 
@@ -86,7 +87,7 @@ loss_param = 1.0
 
 # Neural network (NN) structure
 m = 15 # Number of neurons in each hidden layer.
-d = 3 # Number of hidden layers (Note including input nor output layer)         
+d = 1 # Number of hidden layers (Note including input nor output layer)         
 
 # Other NN parameters
 lr = 1e-2 # Learning rate
@@ -95,6 +96,7 @@ epochs=50 # Number of epochs
 
 use_batch_norm = False
 kernel_initializer = "he_uniform"
+
 activation_dense = "relu"
 activation_output = "sigmoid"
 final_period_cost = False
@@ -102,10 +104,16 @@ final_period_cost = False
 # Other control flags for development purpose.
 flag_load_simulation_data = True
 flag_load_model_simple = False
-flag_load_model_recurrent = False
+flag_load_model_recurrent = True
 flag_load_BS_delta = True
-flag_load_BS_asym = False
+flag_load_BS_asym = True
 flag_save_fig = True
+flag_plot_S_range = "uniform" # "uniform" or "percentile"
+
+# Output directories
+simulation_data_dir = "./data/"
+model_data_dir ="./data/"
+fig_dir = "./figure/"
 
 print("Finish loading all user inputs!\n")
 
@@ -120,7 +128,7 @@ maturity = N*dt
 stochastic_process = BlackScholesProcess(s0 = S0, sigma = sigma, \
                       risk_free = risk_free, dividend = dividend, day_count=day_count)
 
-simulation_data_file = "./data/stock_" + str(int(np.log10(Ktrain))) + ".npy"
+simulation_data_file = model_data_dir +"stock_" + str(int(np.log10(Ktrain))) + ".npy"
 if not flag_load_simulation_data:
   S = stochastic_process.gen_path(maturity, N, int(Ktrain*(1+Ktest_ratio)))
   np.save(simulation_data_file, S)
@@ -133,7 +141,6 @@ else:
 		print("There is no simulation data!!!")
 
 #@title <font color='Blue'>**Prepare data to be fed into the deep hedging algorithm.**</font>
-
 payoff_T = payoff_func(S[:,-1]) # Payoff of the call option
 
 trade_set =  np.stack((S),axis=1) # Trading set
@@ -150,19 +157,19 @@ elif information_set is "normalized_log_S":
 #   2) Trade set: [S]
 #   2) Information set: [S] 
 #   3) payoff (dim = 1)
-xtrain = [np.zeros(len(S))]
+x_all = [np.zeros(len(S))]
 for i in range(N+1):
-	xtrain += [trade_set[i,:]]
+	x_all += [trade_set[i,:]]
 	if i != N:
-		xtrain += [I[i,:]]
-xtrain += [payoff_T]
+		x_all += [I[i,:]]
+x_all += [payoff_T]
 
 # Split the entire sample into a training sample and a testing sample.
 test_size = int(Ktrain*Ktest_ratio)
-[xtrain, xtest] = train_test_split(xtrain, test_size=test_size)
+[xtrain, xtest] = train_test_split(x_all, test_size=test_size)
 [S_train, S_test] = train_test_split([S], test_size=test_size)
 [option_payoff_train, option_payoff_test] = \
-    train_test_split([payoff_T], test_size=test_size)
+    train_test_split([x_all[-1]], test_size=test_size)
 
 print("Finish preparing training and testing data!")
 
@@ -179,7 +186,7 @@ model_simple = Deep_Hedging(N=N, d=d+2, m=m, risk_free=risk_free, \
                       loss_type=loss_type, loss_param = loss_param, \
 											use_batch_norm = use_batch_norm, kernel_initializer = kernel_initializer, \
 											activation_dense = activation_dense, activation_output = activation_output, \
-											final_period_cost = final_period_cost)
+											final_period_cost = final_period_cost, payoff_func = payoff_func)
 model_simple.compile(optimizer=optimizer)
 
 # # Stopping criteria
@@ -192,24 +199,23 @@ reduce_lr = ReduceLROnPlateau(monitor="loss", \
           factor=0.5, patience=2, min_delta=1e-3, verbose=0)
 model_checkpoint = ModelCheckpoint(best_model_file, \
           monitor="loss", save_best_only=True, \
-          save_weights_only=False, verbose=0)
+          save_weights_only=True, verbose=0)
 callbacks = [early_stopping, reduce_lr, model_checkpoint, TqdmCallback()]
 
 # Try to preload model weights if possible.
-try:
-	model_simple.load_weights(best_model_file)
-except:
-	print("No saved model with simple network and no transaction cost.\n")
-	if flag_load_model_simple:
-		print("Finished loading the model with simple network.\n")
-	pass
-
-if not flag_load_model_simple:
+if flag_load_model_simple:
+	try:
+		print("Loading model weights with simple network...\n")
+		# As of Tensorflow 2.1, there is an error saving the entire model.
+		# This option does not allow us to save the optimizer states. (ToDo)
+		model_simple.load_weights(best_model_file)
+	except:
+		print("No saved model with simple network and no transaction cost.\n")
+else:
 	# Fit the model.
 	model_fit = model_simple.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
 				validation_data=(xtest, np.empty(0)), callbacks=callbacks, \
-				verbose=0)
-	model_simple.save(best_model_file)
+				verbose=1)
 	print("Finished running deep hedging algorithm! (Simple Network)")
 
 #@title <font color='Blue'>**Run the Deep Hedging Algorithm (Recurrent Network)!**</font>
@@ -227,8 +233,7 @@ model_recurrent = Deep_Hedging(N=N, d=d+2, m=m, risk_free=risk_free, \
 model_recurrent.compile(optimizer=optimizer)
 
 # Stopping criteria
-best_model_file = model_data_dir + \
-          "model_" + strategy_type + "_"  + str(epsilon) + ".h5"
+best_model_file = model_data_dir + "model_" + "_".join((strategy_type, str(epsilon))) + ".h5"
 
 early_stopping = EarlyStopping(monitor="loss", \
           patience=5, min_delta=1e-4, restore_best_weights=True)
@@ -236,25 +241,21 @@ reduce_lr = ReduceLROnPlateau(monitor="loss", \
           factor=0.5, patience=2, min_delta=1e-3, verbose=0)
 model_checkpoint = ModelCheckpoint(best_model_file, \
           monitor="loss", save_best_only=True, \
-          save_weights_only=False, verbose=0)
+          save_weights_only=True, verbose=0)
 
 callbacks = [early_stopping, reduce_lr, model_checkpoint, TqdmCallback()]
 
 # Try to preload model weights if possible.
-try:
-	model_recurrent.load_weights(best_model_file)
-except:
-	print("No saved model with recurrent network and no transaction cost.\n")
-	if flag_load_model_recurrent:
-		print("Finished loading the model with recurrent network.\n")
-	pass
-
-if not flag_load_model_recurrent:
+if flag_load_model_recurrent:
+	try:
+		model_recurrent.load_weights(best_model_file)
+	except:
+		print("No saved model with recurrent network and no transaction cost.\n")
+else:
 	# Fit the model.
 	model_fit = model_recurrent.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
 				validation_data=(xtest, np.empty(0)), callbacks=callbacks, \
 				verbose=0)
-	model_recurrent.save(best_model_file)
 	print("Finished running deep hedging algorithm! (Recurrent Network)")
 
 #@title <font color='Blue'>**Results: Option Prices**</font>
@@ -277,7 +278,7 @@ print("The Deep Hedging (with recurrent network) price is %2.3f." % nn_recurrent
 #@title <font color='Blue'>**Results: Black-Scholes PnL vs Deep Hedging PnL**</font>
 
 # Compute Black-Scholes delta for each sample path at each time t.
-BS_delta_file = "./data/BS_delta.npy"
+BS_delta_file = model_data_dir + "BS_delta.npy"
 if flag_load_BS_delta:
 	try:
 		model_delta = np.load(BS_delta_file)
@@ -328,8 +329,7 @@ ax.legend()
 
 if flag_save_fig:
 	fig_file = fig_dir + "fig" + "_BS_Simple_PnL" + "_" + str(epsilon) + ".png"
-	plt.savefig(fig_file)
-	plt.close()
+	fig_PnL.savefig(fig_file)
 else:
 	plt.show()
 
@@ -337,23 +337,32 @@ print("Successfully plotted Black-Scholes vs Deep Hedging PnL (Simple Network).\
 
 #@title <font color='Blue'>**Results: Black-Scholes Delta vs Deep Hedging Delta.**</font>
 for days_from_today in (1,15,29):
-	# x-axis: [Min_S, 10th percentile, ..., 90th percentile,  Max_S]
-	S_range = np.sort(S_test[0][:,days_from_today])
-	idx2select = np.append(np.arange(0, len(S_range), \
-					int(len(S_range)/100)), len(S_range)-1)
-
-	# Compute NN delta.
-	submodel = Model(model_simple.input, model_simple.get_layer("delta_" + \
+	if flag_plot_S_range is "percentile":
+		# x-axis: [Min_S, 10th percentile, ..., 90th percentile,  Max_S]
+		S_range = np.sort(S_test[0][:,days_from_today])
+		idx2select = np.append(np.arange(0, len(S_range), \
+						int(len(S_range)/100)), len(S_range)-1)
+						
+		S_range = S_range[idx2select]
+	elif flag_plot_S_range is "uniform":
+		min_S = S_test[0][:,days_from_today].min()
+		max_S = S_test[0][:,days_from_today].max()
+		S_range = np.linspace(min_S,max_S,101)
+	
+	# Attention: Need to transform it to be consistent with the information set.
+	if information_set is "S":
+		I_range =  S_range # Information set
+	elif information_set is "log_S":
+		I_range =  np.log(S_range)
+	elif information_set is "normalized_log_S":
+		I_range =  np.log(S_range/S0)
+	
+	# Compute NN delta (This works only for simple network!!!)
+	submodel = Model(model_simple.get_layer("dense_0_" + \
+							str(days_from_today)).input, model_simple.get_layer("delta_" + \
 							str(days_from_today)).output)
-	nn_delta = submodel.predict(xtest, batch_size=test_size,verbose=0)
-
-	tmp_stack = np.stack((S_test[0][:,days_from_today],reshape_1D(nn_delta)),axis=1)
-	tmp_stack = tmp_stack[tmp_stack[:,0].argsort()]
-	tmp_stack = tmp_stack[idx2select]
-
-	S_range = tmp_stack[:,0]
-	nn_delta = tmp_stack[:,1]
-
+	nn_delta = submodel.predict([I_range], batch_size=len(I_range),verbose=0)
+	
 	# Compute Black-Scholes delta for S_range.
 	model_delta = np.zeros(S_range.shape)
 	for i in range(len(S_range)):
@@ -376,13 +385,11 @@ for days_from_today in (1,15,29):
 	ax_delta.legend()
 
 	if flag_save_fig:
-		fig_file = fig_dir + "fig" + "_BS_Simple_Delta" + "_" + \
-			str(epsilon) + "_" + str(days_from_today) + ".png"
-		plt.savefig(fig_file)
-		plt.close()
+		fig_file = fig_dir + "fig" + "_BS_Simple_Delta_" + \
+								"_".join((str(epsilon),str(days_from_today))) + ".png"
+		fig_delta.savefig(fig_file)
 	else:
 		plt.show()
-		
 print("Successfully plotted Black-Scholes vs Deep Hedging Delta (Simple Network).\n")
 
 #@title <font color='Blue'>**Results: Simple vs Recurrent Network**</font>
@@ -412,9 +419,11 @@ if flag_save_fig:
 	fig_file = fig_dir + "fig" + "_Simple_Recurrent_PnL" + "_" + \
 		str(epsilon) + "_" + str(days_from_today) + ".png"
 	plt.savefig(fig_file)
-	plt.close()
+	plt.clf()
 else:
 	plt.show()
+
+plt.close(fig_nn)
 
 print("Successfully plotted Simple vs Recurrent Deep Hedging PnL.\n")
 	
@@ -457,7 +466,7 @@ for epsilon_asym in range_epsilon:
 						factor=0.5, patience=2, min_delta=1e-3, verbose=0)
 	model_checkpoint = ModelCheckpoint(best_model_file, \
 						monitor="loss", save_best_only=True, \
-						save_weights_only=False, verbose=0)
+						save_weights_only=True, verbose=0)
 	callbacks = [early_stopping, reduce_lr, model_checkpoint, TqdmCallback()]
 		
 	if not flag_load_BS_asym:
@@ -465,9 +474,11 @@ for epsilon_asym in range_epsilon:
 		model_asym_fit = model_asym.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
 					validation_data=(xtest, np.empty(0)), callbacks=callbacks, \
 					verbose=0)
-		model_asym.save(best_model_file)
 	else:
-		model_asym_fit = model_asym.load_weights(best_model_file)
+		try:
+			model_asym.load_weights(best_model_file)
+		except:
+			print("No saved model for asymptotic Black-Scholes.\n")
 	
 	# Note: Using limiting results here...
 	(PnL_Asym, certainty_equiv)= model_asym.predict(xtest,batch_size=test_size, verbose=0)
@@ -504,8 +515,7 @@ ax_asym.text(0.1, 0.6, textstr, transform=ax_asym.transAxes, fontsize=11,
 				
 if flag_save_fig:
 	fig_file = fig_dir + "fig" + "_BS_asym" + ".png"
-	plt.savefig(fig_file)
-	plt.close()
+	fig_asym.savefig(fig_file)
 else:
 	plt.show()
 
