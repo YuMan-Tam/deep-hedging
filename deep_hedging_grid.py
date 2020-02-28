@@ -42,7 +42,7 @@ from Utilities import train_test_split, reshape_1D
 from Deep_Hedging import Deep_Hedging
 from Validation import Validation
 
-# Disable warnings for presentation purpose
+# Tensorflow settings
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 tf.compat.v1.disable_eager_execution()
 
@@ -60,7 +60,7 @@ sigma = 0.2 # Implied volatility
 risk_free = 0.0 # Risk-free rate
 dividend = 0.0 # Continuous dividend yield
 
-Ktrain = 1*(10**6) # Size of training sample.
+Ktrain = 1*(10**5) # Size of training sample.
 Ktest_ratio = 0.2 # Fraction of training sample as testing sample.
 
 # European call option (short).
@@ -73,7 +73,7 @@ maturity_date = ql.Date.todaysDate() + N
 day_count = ql.Actual365Fixed() # Actual/Actual (ISDA)
 
 # Proportional transaction cost.
-epsilon = np.power(2.0,-6)*0.0                                
+epsilon = np.power(2.0,-8)*0.0                 
 
 # Information set (in string)
 # Choose from: S, log_S, normalized_log_S (by S0)
@@ -87,7 +87,7 @@ loss_param = 1.0
 
 # Neural network (NN) structure
 m = 15 # Number of neurons in each hidden layer.
-d = 1 # Number of hidden layers (Note including input nor output layer)         
+d = 3 # Number of hidden layers (Note including input nor output layer)         
 
 # Other NN parameters
 lr = 1e-2 # Learning rate
@@ -97,23 +97,26 @@ epochs=50 # Number of epochs
 use_batch_norm = False
 kernel_initializer = "he_uniform"
 
-activation_dense = "relu"
+activation_dense = "leaky_relu"
 activation_output = "sigmoid"
 final_period_cost = False
 
 # Other control flags for development purpose.
+mc_simulator = "QuantLib" # "QuantLib" or "Numpy"
+
 flag_load_simulation_data = True
 flag_load_model_simple = False
-flag_load_model_recurrent = True
+flag_load_model_recurrent = False
 flag_load_BS_delta = True
-flag_load_BS_asym = True
+flag_load_BS_asym = False
 flag_save_fig = True
 flag_plot_S_range = "uniform" # "uniform" or "percentile"
 
 # Output directories
 simulation_data_dir = "./data/"
-model_data_dir ="./data/"
-fig_dir = "./figure/"
+subdir_hyper_param = "/".join((str(epsilon),activation_dense,activation_output,str(m),str(d),str(batch_size),""))
+model_data_dir ="./data/" + subdir_hyper_param
+fig_dir = "./figure/"+ subdir_hyper_param
 
 print("Finish loading all user inputs!\n")
 
@@ -121,17 +124,34 @@ print("Finish loading all user inputs!\n")
 
 #@title <font color='Blue'>**Monte Carlo Simulation - Generate Random Paths of Stock Prices**</font>
 
+# Create a directory if the output directories do not exist.
+for dir in (simulation_data_dir, model_data_dir, fig_dir):
+	try:
+		os.makedirs(dir)
+	except:
+		pass
+		
 # Length of one time-step (as fraction of a year).
+nobs = int(Ktrain*(1+Ktest_ratio)) # Training + Testing
+
 dt = day_count.yearFraction(calculation_date,calculation_date + 1) 
 maturity = N*dt
 
 stochastic_process = BlackScholesProcess(s0 = S0, sigma = sigma, \
                       risk_free = risk_free, dividend = dividend, day_count=day_count)
 
-simulation_data_file = model_data_dir +"stock_" + str(int(np.log10(Ktrain))) + ".npy"
+simulation_data_file = simulation_data_dir +"stock_" + str(int(np.log10(Ktrain))) + ".npy"
 if not flag_load_simulation_data:
-  S = stochastic_process.gen_path(maturity, N, int(Ktrain*(1+Ktest_ratio)))
-  np.save(simulation_data_file, S)
+	if mc_simulator is "QuantLib":
+		S = stochastic_process.gen_path(maturity, N, nobs)
+	elif mc_simulator is "Numpy":
+		# Only for geometric Brownian motion
+		randn = (risk_free - dividend - sigma ** 2 / 2.0) * dt + \
+								sigma * np.random.normal(0, np.sqrt(dt), size=(nobs, N))
+		S = np.hstack((np.ones((nobs,1))*np.log(S0),randn))
+		S = np.exp(np.cumsum(S,axis=1))
+		
+	np.save(simulation_data_file, S)
 else:	
 	try:
 	  print("Check if there is usable data from previous simulation...\n")
@@ -148,16 +168,15 @@ trade_set =  np.stack((S),axis=1) # Trading set
 if information_set is "S":
   I =  np.stack((S),axis=1) # Information set
 elif information_set is "log_S":
-  I =  np.stack((np.log(S/100)),axis=1)
+  I =  np.stack((np.log(S)),axis=1)
 elif information_set is "normalized_log_S":
 	I =  np.stack((np.log(S/S0)),axis=1)
 	
 # Structure of xtrain:
-#   1) Certainty equivalent: w (dim = 1)
-#   2) Trade set: [S]
+#   1) Trade set: [S]
 #   2) Information set: [S] 
 #   3) payoff (dim = 1)
-x_all = [np.zeros(len(S))]
+x_all = []
 for i in range(N+1):
 	x_all += [trade_set[i,:]]
 	if i != N:
@@ -186,12 +205,11 @@ model_simple = Deep_Hedging(N=N, d=d+2, m=m, risk_free=risk_free, \
                       loss_type=loss_type, loss_param = loss_param, \
 											use_batch_norm = use_batch_norm, kernel_initializer = kernel_initializer, \
 											activation_dense = activation_dense, activation_output = activation_output, \
-											final_period_cost = final_period_cost, payoff_func = payoff_func)
+											final_period_cost = final_period_cost)
 model_simple.compile(optimizer=optimizer)
 
 # # Stopping criteria
-best_model_file = model_data_dir + \
-          "model_" + strategy_type + "_"  + str(epsilon) + ".h5"
+best_model_file = model_data_dir + "_".join(("model", strategy_type,str(epsilon),"{epoch}"))
 
 early_stopping = EarlyStopping(monitor="loss", \
           patience=5, min_delta=1e-4, restore_best_weights=True)
@@ -215,7 +233,7 @@ else:
 	# Fit the model.
 	model_fit = model_simple.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
 				validation_data=(xtest, np.empty(0)), callbacks=callbacks, \
-				verbose=1)
+				verbose=0)
 	print("Finished running deep hedging algorithm! (Simple Network)")
 
 #@title <font color='Blue'>**Run the Deep Hedging Algorithm (Recurrent Network)!**</font>
@@ -233,7 +251,7 @@ model_recurrent = Deep_Hedging(N=N, d=d+2, m=m, risk_free=risk_free, \
 model_recurrent.compile(optimizer=optimizer)
 
 # Stopping criteria
-best_model_file = model_data_dir + "model_" + "_".join((strategy_type, str(epsilon))) + ".h5"
+best_model_file = model_data_dir + "_".join(("model", strategy_type,str(epsilon),"{epoch}"))
 
 early_stopping = EarlyStopping(monitor="loss", \
           patience=5, min_delta=1e-4, restore_best_weights=True)
@@ -266,7 +284,7 @@ instrument = report.get_instrument(name = "European_Call", strike = strike, \
                                     maturity_date = maturity_date)
 
 BS_price = report.get_model_PV(instrument, s0=S0)
-risk_neutral_price = report.get_risk_neutral_PV()
+risk_neutral_price = report.get_risk_neutral_PV(risk_free,dt,N)
 nn_simple_price = model_simple.evaluate(xtest, batch_size=test_size, verbose=0)
 nn_recurrent_price = model_recurrent.evaluate(xtest, batch_size=test_size, verbose=0)
 
@@ -278,7 +296,7 @@ print("The Deep Hedging (with recurrent network) price is %2.3f." % nn_recurrent
 #@title <font color='Blue'>**Results: Black-Scholes PnL vs Deep Hedging PnL**</font>
 
 # Compute Black-Scholes delta for each sample path at each time t.
-BS_delta_file = model_data_dir + "BS_delta.npy"
+BS_delta_file = simulation_data_dir + "BS_delta.npy"
 if flag_load_BS_delta:
 	try:
 		model_delta = np.load(BS_delta_file)
@@ -312,7 +330,7 @@ PnL_BS += (np.multiply(S_test[0][:,N],model_delta[:,N-1]) + option_payoff_test[0
               np.abs(model_delta[:,N-1])*S_test[0][:,N]*epsilon)
 
 # Compute deep hedging PnL.
-(PnL_Deep_Hedge, certainty_equiv) = model_simple.predict(xtest,batch_size=test_size, verbose=0)
+PnL_Deep_Hedge = model_simple.predict(xtest,batch_size=test_size, verbose=0)
 
 # Plot Black-Scholes PnL and Deep Hedging PnL (with BS_price charged on both).
 fig_PnL = plt.figure(dpi= 125, facecolor='w')
@@ -395,12 +413,10 @@ print("Successfully plotted Black-Scholes vs Deep Hedging Delta (Simple Network)
 #@title <font color='Blue'>**Results: Simple vs Recurrent Network**</font>
 
 # Compute deep hedging PnL for simple network.
-[PnL_Deep_Hedge_simple, certainty_equiv] = \
-            model_simple.predict(xtest,batch_size=test_size,verbose=0)
+PnL_Deep_Hedge_simple = model_simple.predict(xtest,batch_size=test_size,verbose=0)
 
 # Compute deep hedging PnL for recurrent network.
-[PnL_Deep_Hedge_recurrent, certainty_equiv] = \
-          model_recurrent.predict(xtest,batch_size=test_size,verbose=0)
+PnL_Deep_Hedge_recurrent = model_recurrent.predict(xtest,batch_size=test_size,verbose=0)
 
 # Plot Simple Network PnL vs Recurrent Network PnL (with BS_price charged on both).
 print("\n")
@@ -436,6 +452,7 @@ print("Successfully plotted Simple vs Recurrent Deep Hedging PnL.\n")
 strategy_type = "simple"
 range_epsilon = np.power(2.0,np.arange(-5,0,1)-5)
 bs_price_asym = np.zeros_like(range_epsilon)
+bs_price_nonasym = np.zeros_like(range_epsilon)
 
 # For each epsilon, compute the deep-hedging (using simple network) price.
 i = 0
@@ -453,8 +470,10 @@ for epsilon_asym in range_epsilon:
 
 	# Load weight from previous run (if possible) in an attempt to improve results.
 	try:
-		best_model_file = model_data_dir + \
-			"model_" + strategy_type + "_"  + str(epsilon_asym) + ".h5"
+		subdir_hyper_param = "/".join((str(epsilon_asym),activation_dense,activation_output,str(m),str(d),str(batch_size),""))
+		model_data_dir ="./data/" + subdir_hyper_param
+		
+		best_model_file = model_data_dir + "_".join(("model", strategy_type,str(epsilon_asym),"{epoch}"))
 		model_asym_fit = model_asym.load_weights(best_model_file)
 	except:
 		pass
@@ -481,10 +500,14 @@ for epsilon_asym in range_epsilon:
 			print("No saved model for asymptotic Black-Scholes.\n")
 	
 	# Note: Using limiting results here...
-	(PnL_Asym, certainty_equiv)= model_asym.predict(xtest,batch_size=test_size, verbose=0)
+	PnL_Asym = model_asym.predict(xtest,batch_size=test_size, verbose=0)
 	bs_price_asym[i] = -PnL_Asym.mean()
-	print("The deep-hedging price is %2.3f.\n" % bs_price_asym[i])
-		
+	print("The asymptotic deep-hedging price is %2.3f.\n" % bs_price_asym[i])
+	
+	# Price without using the asymptotic formula.
+	bs_price_nonasym[i] = model_asym.evaluate(xtest,batch_size=test_size, verbose=0)
+	print("The non-asymptotic deep-hedging price is %2.3f.\n" % bs_price_nonasym[i])
+	
 	i += 1
 
 # Create a plot of Black-Scholes Asymptotic - Figure 10 of Buehler et al (2019).
