@@ -17,6 +17,8 @@ intitalizer_dict = {
 	"truncated_normal": TruncatedNormal()
 }
 
+bias_initializer=he_uniform()
+
 class Deep_Hedging:
 	def __init__ (self, N = None, d = None, m = None, \
 			risk_free = None, maturity = None, \
@@ -31,18 +33,18 @@ class Deep_Hedging:
 		
 	def model(self, inititial_wealth = 0.0, strategy_type = None, \
 							epsilon = 0.0, loss_type = None, \
-							use_batch_norm = True, kernel_initializer = "he_uniform", \
+							use_batch_norm = None, kernel_initializer = "he_uniform", \
 							activation_dense = "relu", activation_output = "linear", 
-							final_period_cost = False, **kwargs):
+							final_period_cost = False, payoff_func = None, **kwargs):
 		# State variables.
 		prc = Input(shape=(1,), name = "prc_0")
 		information_set = Input(shape=(1,), name = "information_set_0")
 		
 		# The control variable is the hedging strategy and
 		# certainty equivalent.
-		w = Input(shape=(1,))
+		w = tf.Variable(0.0)
 		
-		inputs = [w, prc, information_set]
+		inputs = [prc, information_set]
 		layers = [None for _ in range((self.N+1)*self.d)]
 		for j in range(self.N+1):            
 			if j < self.N:
@@ -60,6 +62,7 @@ class Deep_Hedging:
 					if i == 0:
 						layers[i+(j)*self.d] = Dense(self.m,
 							   kernel_initializer=kernel_initializer,
+								 bias_initializer=bias_initializer,
 							   use_bias=(not use_batch_norm), 
 							   name = "dense_" + str(i)+ "_" + str(j))(helper1)
 						
@@ -70,13 +73,14 @@ class Deep_Hedging:
 														)(layers[i+(j)*self.d], training=True)
 						
 						if activation_dense is "leaky_relu":
-							strategyhelper = LeakyReLU(layers[i+(j)*self.d])
+							strategyhelper = LeakyReLU()(layers[i+(j)*self.d])
 						else:
 							strategyhelper = Activation(activation_dense)(layers[i+(j)*self.d])
 						
 					elif i != self.d-1:
 						layers[i+(j)*self.d] = Dense(self.m,
 							   kernel_initializer=kernel_initializer,
+								 bias_initializer=bias_initializer,
 							   use_bias=(not use_batch_norm),
 							   name = "dense_" + str(i)+ "_" + str(j))(strategyhelper)
 						
@@ -87,12 +91,13 @@ class Deep_Hedging:
 														)(layers[i+(j)*self.d], training=True)
 														
 						if activation_dense is "leaky_relu":
-							strategyhelper = LeakyReLU(layers[i+(j)*self.d])
+							strategyhelper = LeakyReLU()(layers[i+(j)*self.d])
 						else:
 							strategyhelper = Activation(activation_dense)(layers[i+(j)*self.d])
 					else:
 						strategyhelper = Dense(1,
 						   kernel_initializer=kernel_initializer,
+							 bias_initializer=bias_initializer,
 						   use_bias=True, 
 						   name = "dense_" + str(i)+ "_" + str(j))(strategyhelper)
 							 
@@ -158,24 +163,8 @@ class Deep_Hedging:
 				
 				wealth = Add(name = "wealth_" + str(j))([wealth,payoff])
 
-				# The bias with weights for the kernel should be zero.
-				if loss_type is "CVaR":
-					# The bias with weights for the kernel should be zero.
-					# If you run model.summary(), it will say there are two parameters.
-					# But it's really just one because of the MaxNorm constraint.
-					w = Dense(1, activation='linear', trainable= True,
-							kernel_constraint=MaxNorm(0.0),
-							kernel_initializer=Zeros(),
-							bias_initializer=he_normal(),
-							name = "certainty_equiv")(w)
-					loss = Loss_Metrics(wealth,w).CVaR(kwargs["loss_param"])
-				elif loss_type is "Entropy":
-					w = Dense(1, activation='linear', trainable= False,
-							kernel_initializer=Zeros(),
-							bias_initializer=Zeros(),
-							name = "certainty_equiv")(w)
 				loss = Loss_Metrics(wealth,w).Entropy(kwargs["loss_param"])
 				
-				model = Model(inputs, outputs=[wealth, w])                    
+				model = Model(inputs, outputs=wealth)                    
 				model.add_loss(loss)
 		return model
