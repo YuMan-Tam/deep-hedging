@@ -22,8 +22,8 @@ class Validation:
 		instrument.setPricingEngine(engine)
 		return instrument
 		
-	def get_risk_neutral_PV(self, verbose = True):
-		return -np.mean(self.data[-1])
+	def get_risk_neutral_PV(self, risk_free = None, dt = None, N = None, verbose = True):
+		return -np.mean(self.data[-1])*np.exp(-risk_free*dt*N)
 		
 	def get_model_PV(self, instrument=None, s0=None, \
 											calculation_date = ql.Date.todaysDate()):
