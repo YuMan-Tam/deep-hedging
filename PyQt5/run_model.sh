@@ -1,4 +1,4 @@
-# By Yu-Man Tam: 1/7/2020
+# By Yu-Man Tam: 4/10/2020
 
 # Command to run:
 # bsub -Is -q "python"  numactl -C 0 zsh run_model.sh
