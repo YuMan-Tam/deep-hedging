@@ -10,8 +10,7 @@
 # Qt references: https://doc.qt.io/qt-5/qmainwindow.html
 
 import sys, os
-sys.path.insert(0, os.getcwd() + "/lib/qt")
-sys.path.insert(0, os.getcwd() + "/lib")
+sys.path.insert(0, os.getcwd() + "/../lib")
 
 import time
 
@@ -29,7 +28,6 @@ from scipy.stats import norm
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtWidgets, QtCore, QtGui
 from pyqtgraph.parametertree import ParameterTree, Parameter
-from pyqtgraph.widgets.RemoteGraphicsView import RemoteGraphicsView
 
 # User-defined libraries
 from stochastic_processes import BlackScholesProcess
@@ -69,8 +67,6 @@ final_period_cost = False
 
 # Number of bins to plot for the PnL histograms.
 num_bins = 30
-
-app = QtGui.QApplication([])
 
 # Need a separate threads for deep hedging algo and plot the graphs.
 class DH_Worker(QtCore.QThread):
@@ -126,8 +122,9 @@ class DH_Worker(QtCore.QThread):
 		
 		optimizer = Adam(learning_rate=self.learning_rate)
 		
-		num_epoch = 0
 		start = time.time()
+		
+		num_epoch = 0
 		while num_epoch <= self.epochs:
 			# Exit event loop if the exit flag is set to True.
 			if self._exit:
@@ -145,7 +142,7 @@ class DH_Worker(QtCore.QThread):
 					
 					mini_batch_iter = self.training_dataset.shuffle(self.Ktrain).batch(self.batch_size).__iter__()
 					mini_batch = mini_batch_iter.next()
-			
+		
 				num_batch += 1
 				
 				# Record gradient
@@ -160,8 +157,9 @@ class DH_Worker(QtCore.QThread):
 				# Forward and backward passes
 				grads = tape.gradient(loss, self.model.trainable_weights)
 				optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
-				
+			
 				end = time.time()
+				
 				if end - start > 0:
 					self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, loss.numpy().squeeze(), \
 																	num_epoch, num_batch)
@@ -182,8 +180,8 @@ class MainWindow(QtWidgets.QMainWindow):
 		self.Thread_RunDH.DH_outputs["PyQt_PyObject", "PyQt_PyObject", "PyQt_PyObject", \
 				"PyQt_PyObject", "double", "double"].connect(self.Update_PnL_Hist_Widget)
 		self.Thread_RunDH.DH_outputs["PyQt_PyObject", "PyQt_PyObject", "PyQt_PyObject", \
-				"PyQt_PyObject", "double", "double"].connect(self.Update_Delta_Plot_Widget)		
-			
+				"PyQt_PyObject", "double", "double"].connect(self.Update_Delta_Plot_Widget)
+				
 		# Define a top-level widget to hold everything
 		self.w = QtGui.QWidget()
 		
@@ -274,14 +272,14 @@ class MainWindow(QtWidgets.QMainWindow):
 			self.submodel = self.Define_DH_Delta_Strategy_Model()
 			
 			# Add the PnL histogram (PlotWidget) - Black-Scholes vs Deep Hedging.
-			self.fig_PnL_view, self.fig_PnL = self.PnL_Hist_Widget()
-			self.layout.addWidget(self.fig_PnL_view, 0, 3, 2, 1) 
-			self.fig_PnL_view.setMinimumWidth(600)
+			self.fig_PnL = self.PnL_Hist_Widget()
+			self.layout.addWidget(self.fig_PnL, 0, 3, 2, 1) 
+			self.fig_PnL.setMinimumWidth(600)
 			
 			# Add the Delta line plot (PlotWidget) - Black-Scholes vs Deep Hedging.
-			self.fig_delta_view, self.fig_delta = self.Delta_Plot_Widget()
-			self.layout.addWidget(self.fig_delta_view, 0, 4, 2, 1)
-			self.fig_delta_view.setMinimumWidth(600)
+			self.fig_delta = self.Delta_Plot_Widget()
+			self.layout.addWidget(self.fig_delta, 0, 4, 2, 1)
+			self.fig_delta.setMinimumWidth(600)
 			
 			# Add the loss plot (PlotWidget) - Black-Scholes vs Deep Hedging.
 			self.fig_loss = self.Loss_Plot_Widget()
@@ -348,38 +346,29 @@ class MainWindow(QtWidgets.QMainWindow):
 	# Draw PnL histogram (PlotWidget) - Black-Scholes vs Deep Hedging.
 	def PnL_Hist_Widget(self):		
 		# Initialize the PnL Histogram Widget.
-		# See issue: https://github.com/pyqtgraph/pyqtgraph/issues/1153
-		
-		# Speed up options see here:
-		# http://www.pyqtgraph.org/downloads/0.10.0/pyqtgraph-0.10.0-deb/pyqtgraph-0.10.0/examples/RemoteSpeedTest.py
-		
-		# Setup remote process.
-		fig_PnL_view = RemoteGraphicsView()
-		fig_PnL_view.pg.setConfigOptions(antialias=True)
-		
-		fig_PnL = fig_PnL_view.pg.PlotItem()
-		fig_PnL_view.setCentralItem(fig_PnL)
+		fig_PnL = pg.PlotWidget()
 
 		self.x_range = (self.PnL_BS.min()+self.price_BS[0,0], self.PnL_BS.max()+self.price_BS[0,0])
 		self.BS_bins, self.bin_edges = np.histogram(self.PnL_BS+self.price_BS[0,0], bins = num_bins, range = self.x_range)
 		self.width = (self.bin_edges[1] - self.bin_edges[0])/2.0
 
-		# PnL histogram for Black-Scholes.
-		self.BS_hist = fig_PnL_view.pg.BarGraphItem(x=self.bin_edges[:-2], height=self.BS_bins, width=self.width, brush='r')
+		self.BS_hist = pg.BarGraphItem(x=self.bin_edges[:-2], height=self.BS_bins, width=self.width, brush='r')
 		fig_PnL.addItem(self.BS_hist)
 		
-		# PnL histogram for Black-Scholes.
-		self.DH_hist = fig_PnL_view.pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=self.BS_bins*0.0, width=self.width, brush='b')
-		fig_PnL.addItem(self.DH_hist)
-		
-		return fig_PnL_view, fig_PnL
+		return fig_PnL
 	
 	# Update PnL histogram (PlotWidget) - Black-Scholes vs Deep Hedging.
 	def Update_PnL_Hist_Widget(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
 															loss = None, num_epoch = None, num_batch = None):
-		self.DH_hist.setOpts(height=DH_bins)
-		self.fig_PnL.setTitle(str(num_epoch) + "," + str(num_batch))	
-		
+		if num_epoch == 1 and num_batch == 1:
+			# Update PnL Histograms
+			self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b')
+			self.fig_PnL.addItem(self.DH_hist)
+		else:
+			# Update PnL Histograms
+			self.DH_hist.setOpts(height=DH_bins)
+			self.fig_PnL.setTitle(str(num_epoch) + "," + str(num_batch))
+			
 	# Draw Delta plot (PlotWidget) - Black-Scholes vs Deep Hedging.
 	# Assume the PnL_Hist_Widget ran first, so we don't need to run the model again.
 	def Delta_Plot_Widget(self):
@@ -404,35 +393,28 @@ class MainWindow(QtWidgets.QMainWindow):
 					
 		self.model_delta = norm.cdf(self.d1)*np.exp(-self.dividend*self.tau)
 		
-		# Setup remote process.
-		fig_delta_view = RemoteGraphicsView()
-		fig_delta_view.pg.setConfigOptions(antialias=True)
+		fig_delta = pg.PlotWidget()
 		
-		fig_delta = fig_delta_view.pg.PlotItem()
-		fig_delta_view.setCentralItem(fig_delta)
-		
-		# Delta plot for Black-Scholes
-		self.BS_delta_plot = fig_delta_view.pg.PlotDataItem()
-		self.BS_delta_plot.setPen(color ="r", width=2.5)
-		self.BS_delta_plot.setDownsampling(auto=True, method="peak")
+		self.BS_delta_plot = pg.PlotCurveItem(pen = pg.mkPen(color="r", width=2.5))
 		self.BS_delta_plot.setData(self.S_range, self.model_delta)
 		
 		fig_delta.addItem(self.BS_delta_plot)
-
-		# Delta plot for Deep-Hedging
-		self.DH_delta_plot = fig_delta_view.pg.ScatterPlotItem(brush='b', size=5)
-		self.DH_delta_plot.setPen(brush='b', size=5)
-		
-		fig_delta.addItem(self.DH_delta_plot)		
-		
-		return fig_delta_view, fig_delta
+							
+		return fig_delta
 		
 	# Update Delta Plot (PlotWidget) - Black-Scholes vs Deep Hedging.
 	def Update_Delta_Plot_Widget(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
 															loss = None, num_epoch = None, num_batch = None):
-		self.DH_delta_plot.setData(self.S_range,DH_delta, symobol="o")
-		self.fig_delta.setTitle(str(num_epoch) + "," + str(num_batch))
-
+		if num_epoch == 1 and num_batch == 1:	
+			# Update the Delta plots
+			self.DH_delta_plot = pg.ScatterPlotItem(brush='b', size=5)
+			self.DH_delta_plot.setData(self.S_range, DH_delta)
+			self.fig_delta.addItem(self.DH_delta_plot)
+		else:
+			# Update the Delta plots
+			self.DH_delta_plot.setData(self.S_range,DH_delta)
+			self.fig_delta.setTitle(str(num_epoch) + "," + str(num_batch))
+			
 	# Draw loss plot (PlotWidget) - Black-Scholes vs Deep Hedging.
 	def Loss_Plot_Widget(self):
 		fig_loss = pg.PlotWidget()
@@ -451,7 +433,7 @@ class MainWindow(QtWidgets.QMainWindow):
 		else:
 			pass
 			# self.DH_hist.setOpts(height=DH_bins)
-		
+			
 	def simulate_stock_prices(self):
 		self.nobs = int(self.Ktrain*(1+self.Ktest_ratio)) # Total obs = Training + Testing
 		
@@ -514,8 +496,7 @@ class MainWindow(QtWidgets.QMainWindow):
 		return price_BS, delta_BS, PnL_BS
 		
 if __name__ == '__main__':
+	app = QtWidgets.QApplication(sys.argv)
 	main = MainWindow()
 	main.show()
-	
-	if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-			QtGui.QApplication.instance().exec_()
+	app.exec_()
