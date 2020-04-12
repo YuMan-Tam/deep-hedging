@@ -10,8 +10,7 @@
 # Qt references: https://doc.qt.io/qt-5/qmainwindow.html
 
 import sys, os
-sys.path.insert(0, os.getcwd() + "/lib/qt")
-sys.path.insert(0, os.getcwd() + "/lib")
+sys.path.insert(0, os.getcwd() + "/../lib")
 
 import time
 
@@ -310,8 +309,6 @@ class MainWindow(QtWidgets.QMainWindow):
                                                 use_batch_norm = use_batch_norm, kernel_initializer = kernel_initializer, \
                                                 activation_dense = activation_dense, activation_output = activation_output, \
                                                 final_period_cost = final_period_cost)
-    # Accelerate the code using tf.function. 
-    model_func = tf.function(model)
     
     return model
   
@@ -368,11 +365,11 @@ class MainWindow(QtWidgets.QMainWindow):
     self.S_range = np.linspace(self.min_S,self.max_S,101)
 
     # Attention: Need to transform it to be consistent with the information set.
-    if information_set is "S":
+    if information_set == "S":
       self.I_range =  self.S_range # Information set
-    elif information_set is "log_S":
+    elif information_set == "log_S":
       self.I_range =  np.log(self.S_range)
-    elif information_set is "normalized_log_S":
+    elif information_set == "normalized_log_S":
       self.I_range =  np.log(self.S_range/self.S0)        
         
     # Compute Black-Scholes delta for S_range.
@@ -390,48 +387,54 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_delta.addItem(self.BS_delta_plot)
                         
     return fig_delta
+      
+  # Draw loss plot (PlotWidget) - Black-Scholes vs Deep Hedging.
+  def Loss_Plot_Widget(self):
+    fig_loss = pg.PlotWidget()
+    
+    # Set appropriate range.
+    self.total_train_step = np.floor(self.Ktrain/self.batch_size)*self.epochs
+    fig_loss.setRange(xRange = (0, self.total_train_step))
+    
+    self.DH_loss_plot = pg.PlotCurveItem(pen = pg.mkPen(color="b", width=2.5), \
+                          autoDownsample=True, downsampleMethod="peak")
+    fig_loss.addItem(self.DH_loss_plot)
 
+    return fig_loss
+  
   # Update PnL histogram (PlotWidget) and Delta Plot (PlotWidget) - Black-Scholes vs Deep Hedging.
   def Update_Plots_Widget(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
                                                           loss = None, num_epoch = None, num_batch = None):
     if num_epoch == 1 and num_batch == 1:
-      # Update PnL Histograms
+      # Update PnL Histogram
       self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b')
       self.fig_PnL.addItem(self.DH_hist)
 
-      # Update the Delta plots
+      # Update the Delta plot
       self.DH_delta_plot = pg.ScatterPlotItem(brush='b', size=5)
       self.DH_delta_plot.setData(self.S_range, DH_delta)
       self.fig_delta.addItem(self.DH_delta_plot)
+      
+      # Update the Loss plot
+      self.step = 1
+      self.loss_plot_data = np.array((self.step, loss), ndmin=2)
+      self.DH_loss_plot.setData(self.loss_plot_data[:,0], self.loss_plot_data[:,1])
+      
     else:
       # Update PnL Histograms
       self.DH_hist.setOpts(height=DH_bins)
       self.fig_PnL.setTitle(str(num_epoch) + "," + str(num_batch))
 
-      # Update the Delta plots
+      # Update the Delta plot
       self.DH_delta_plot.setData(self.S_range,DH_delta)
       self.fig_delta.setTitle(str(num_epoch) + "," + str(num_batch))
-        
+      
+      # Update the Loss plot
+      self.step += 1
+      self.loss_plot_data = np.vstack([self.loss_plot_data, np.array((self.step,loss), ndmin=2)])
+      self.DH_loss_plot.setData(self.loss_plot_data[:,0], self.loss_plot_data[:,1])
+      
     self.Thread_RunDH.Figure_IsUpdated = True
-      
-  # Draw loss plot (PlotWidget) - Black-Scholes vs Deep Hedging.
-  def Loss_Plot_Widget(self):
-    fig_loss = pg.PlotWidget()
-    self.BS_loss_plot = pg.PlotCurveItem(pen = pg.mkPen(color="r", width=2.5))
-    fig_loss.addItem(self.BS_loss_plot)
-    # Work here.
-    return fig_loss
-      
-  # Update loss plot (PlotWidget) - Black-Scholes vs Deep Hedging.
-  def Update_Loss_Plot_Widget(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
-                                                              loss = None, num_epoch = None, num_batch = None):
-    if num_epoch == 1 and num_batch == 1:
-        pass
-        # self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b')
-        # self.fig_PnL.addItem(self.DH_hist)
-    else:
-        pass
-        # self.DH_hist.setOpts(height=DH_bins)
           
   def simulate_stock_prices(self):
     self.nobs = int(self.Ktrain*(1+self.Ktest_ratio)) # Total obs = Training + Testing
@@ -451,11 +454,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     self.trade_set =  np.stack((self.S),axis=1) # Trading set
 
-    if information_set is "S":
+    if information_set == "S":
       self.I =  np.stack((self.S),axis=1) # Information set
-    elif information_set is "log_S":
+    elif information_set == "log_S":
       self.I =  np.stack((np.log(self.S)),axis=1)
-    elif information_set is "normalized_log_S":
+    elif information_set == "normalized_log_S":
       self.I =  np.stack((np.log(self.S/self.S0)),axis=1)
         
     # Structure of xtrain:
