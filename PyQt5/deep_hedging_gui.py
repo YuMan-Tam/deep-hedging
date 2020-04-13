@@ -42,7 +42,6 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 # Default Parameters
 # European call option (short).
-payoff_func = lambda x: -np.maximum(x - strike, 0.0)
 calculation_date = ql.Date.todaysDate()
 
 # Day convention.
@@ -192,27 +191,29 @@ class MainWindow(QtWidgets.QMainWindow):
     self.setCentralWidget(self.w)
 
     # Add the parameter menu.
+    self.tree_height = 5 # Must be Odd number.
+    
     self.tree = self.Deep_Hedging_Parameter_Widget()
-    self.layout.addWidget(self.tree, 0, 0, 3, 2)   # upper-left
+    self.layout.addWidget(self.tree, 0, 0, self.tree_height, 2)   # upper-left
 
     self.tree.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
     self.tree.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-    self.tree.setMinimumSize(350,525)
+    self.tree.setMinimumSize(350,650)
     
     # Add a run button
     self.run_btn = QtGui.QPushButton('Run')
-    self.layout.addWidget(self.run_btn, 3, 0, 1, 1)   # button goes in upper-left
+    self.layout.addWidget(self.run_btn, self.tree_height+1, 0, 1, 1)   # button goes in upper-left
     
     # Add a pause button
     self.pause_btn = QtGui.QPushButton('Pause')
-    self.layout.addWidget(self.pause_btn, 3, 1, 1, 1)   # button goes in upper-left
+    self.layout.addWidget(self.pause_btn, self.tree_height+1, 1, 1, 1)   # button goes in upper-left
     
     # Run the deep hedging algo in a separate thread when the run button is clicked.
     self.run_btn.clicked.connect(self.RunButton)
     
     # Pause button.
     self.pause_btn.clicked.connect(self.Pause)
-      
+
   def Deep_Hedging_Parameter_Widget(self):
     tree = ParameterTree()
     
@@ -271,19 +272,20 @@ class MainWindow(QtWidgets.QMainWindow):
       self.model = self.Define_DH_model()
       self.submodel = self.Define_DH_Delta_Strategy_Model()
       
+      plot_height_split = (self.tree_height+1)/2
       # Add the PnL histogram (PlotWidget) - Black-Scholes vs Deep Hedging.
       self.fig_PnL = self.PnL_Hist_Widget()
-      self.layout.addWidget(self.fig_PnL, 0, 3, 2, 1) 
+      self.layout.addWidget(self.fig_PnL, 0, 3, plot_height_split, 1) 
       self.fig_PnL.setMinimumWidth(600)
       
       # Add the Delta line plot (PlotWidget) - Black-Scholes vs Deep Hedging.
       self.fig_delta = self.Delta_Plot_Widget()
-      self.layout.addWidget(self.fig_delta, 0, 4, 2, 1)
+      self.layout.addWidget(self.fig_delta, 0, 4, plot_height_split , 1)
       self.fig_delta.setMinimumWidth(600)
       
       # Add the loss plot (PlotWidget) - Black-Scholes vs Deep Hedging.
       self.fig_loss = self.Loss_Plot_Widget()
-      self.layout.addWidget(self.fig_loss, 2, 3, 2, 2)
+      self.layout.addWidget(self.fig_loss, plot_height_split, 3, plot_height_split+1, 2)
       self.fig_loss.setMinimumWidth(1200)
       
       # Run the deep hedging algo in a separate thread.
@@ -352,6 +354,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     self.BS_hist = pg.BarGraphItem(x=self.bin_edges[:-2], height=self.BS_bins, width=self.width, brush='r')
     fig_PnL.addItem(self.BS_hist)
+    fig_PnL.setTitle("<font size='5'>Profit and Loss (PnL) Histogram</font>")
+    fig_PnL.setLabels(left="<font size='4'>Frequency</font>", bottom="<font size='4'>Profit and Loss (PnL) </font>")
     
     return fig_PnL
           
@@ -385,20 +389,27 @@ class MainWindow(QtWidgets.QMainWindow):
     self.BS_delta_plot.setData(self.S_range, self.model_delta)
     
     fig_delta.addItem(self.BS_delta_plot)
+    fig_delta.setTitle("<font size='5'>Delta Plot</font>")
+    fig_delta.setLabels(left="<font size='4'>Delta</font>", bottom="<font size='4'>Stock Price</font>")
                         
     return fig_delta
+  
       
   # Draw loss plot (PlotWidget) - Black-Scholes vs Deep Hedging.
   def Loss_Plot_Widget(self):
     fig_loss = pg.PlotWidget()
     
-    # Set appropriate range.
+    # Set appropriate xRange.
     self.total_train_step = np.floor(self.Ktrain/self.batch_size)*self.epochs
     fig_loss.setRange(xRange = (0, self.total_train_step))
     
-    self.DH_loss_plot = pg.PlotCurveItem(pen = pg.mkPen(color="b", width=2.5), \
-                          autoDownsample=True, downsampleMethod="peak")
+    self.DH_loss_plot = pg.ScatterPlotItem(brush='b', size=3)
     fig_loss.addItem(self.DH_loss_plot)
+    
+    # Label the graph.
+    self.fig_loss_title = "<font size='5'> Loss Function (Option Price) </font>"
+    fig_loss.setTitle(self.fig_loss_title)
+    fig_loss.setLabels(left="<font size='4'>Loss Value</font>", bottom="<font size='4'>Loss Function (Option Price) - Number of Steps</font>")
 
     return fig_loss
   
@@ -417,22 +428,26 @@ class MainWindow(QtWidgets.QMainWindow):
       
       # Update the Loss plot
       self.step = 1
-      self.loss_plot_data = np.array((self.step, loss), ndmin=2)
-      self.DH_loss_plot.setData(self.loss_plot_data[:,0], self.loss_plot_data[:,1])
+      self.DH_loss_plot.addPoints(np.array((self.step,)), np.array((loss,)))
       
     else:
       # Update PnL Histograms
       self.DH_hist.setOpts(height=DH_bins)
-      self.fig_PnL.setTitle(str(num_epoch) + "," + str(num_batch))
 
       # Update the Delta plot
       self.DH_delta_plot.setData(self.S_range,DH_delta)
-      self.fig_delta.setTitle(str(num_epoch) + "," + str(num_batch))
       
       # Update the Loss plot
       self.step += 1
-      self.loss_plot_data = np.vstack([self.loss_plot_data, np.array((self.step,loss), ndmin=2)])
-      self.DH_loss_plot.setData(self.loss_plot_data[:,0], self.loss_plot_data[:,1])
+      
+      # Downsampling.
+      if self.step % 50 == 1:
+        self.DH_loss_plot.addPoints(np.array((self.step,)), np.array((loss,)))
+        
+    self.fig_loss_status_text = "<font size='5'>" + "Epoch = " + "{:.0f}".format(num_epoch) + "&nbsp;&nbsp;"\
+                                  " Batch = " + "{:.0f}".format(num_batch) + "&nbsp;&nbsp;"\
+                                  " Loss = " + "{:.3f}".format(loss) + "</font>"
+    self.fig_loss.setTitle(self.fig_loss_status_text)
       
     self.Thread_RunDH.Figure_IsUpdated = True
           
