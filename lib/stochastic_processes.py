@@ -8,12 +8,11 @@ from tqdm import trange
 # https://github.com/lballabio/QuantLib-SWIG
 
 # Assigned seed for testing. Set to 0 for random seeds.
-seed = 0
 
 # Geometric Brownian Motion.
 class BlackScholesProcess:
 	def __init__(self,s0 = None, sigma = None, risk_free = None, \
-					dividend = None, day_count = None):
+					dividend = None, day_count = None, seed=0):
 		self.s0 = s0
 		self.sigma = sigma
 		self.risk_free = risk_free
