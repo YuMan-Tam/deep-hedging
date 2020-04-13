@@ -148,18 +148,18 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
 			
 			wealth = Add(name = "wealth_" + str(j))([wealth,payoff])
 
-        if output_type == "gui":
+	if output_type == "gui":
 	    return Model(inputs=inputs, outputs=wealth)
-        elif output_type == "colab":
-            w = tf.Variable(0.0, name = "certainty_equiv")
+	elif output_type == "colab":
+	    w = tf.Variable(0.0, name = "certainty_equiv")
 
-            if strategy_type == "Entropy":
-                loss = Entropy(wealth,w,loss_param)
-            elif strategy_type == "CVaR":
-                loss = CVaR(wealth,w,loss_param)
+	    if strategy_type == "Entropy":
+		loss = Entropy(wealth,w,loss_param)
+	    elif strategy_type == "CVaR":
+		loss = CVaR(wealth,w,loss_param)
 
-            model = Model(inputs=inputs, outputs=wealth)
-            model.add_loss(loss)
-        return model
+	    model = Model(inputs=inputs, outputs=wealth)
+	    model.add_loss(loss)
+	return model
 
 			
