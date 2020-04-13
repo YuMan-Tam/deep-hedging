@@ -72,7 +72,7 @@ num_bins = 30
 
 # Need a separate threads for deep hedging algo and plot the graphs.
 class DH_Worker(QtCore.QThread):
-  DH_outputs = QtCore.pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.float32, float, float)
+  DH_outputs = QtCore.pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.float32, float, float, np.float32)
   def __init__(self):
     QtCore.QThread.__init__(self)
     self._exit = False
@@ -128,6 +128,7 @@ class DH_Worker(QtCore.QThread):
     optimizer = Adam(learning_rate=self.learning_rate)
     
     num_epoch = 0
+    min_loss = 999
     while num_epoch <= self.epochs:
       # Exit event loop if the exit flag is set to True.
       if self._exit:
@@ -160,10 +161,18 @@ class DH_Worker(QtCore.QThread):
         # Forward and backward passes
         grads = tape.gradient(loss, self.model.trainable_weights)
         optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
+
+        # Compute Out-of-Sample Loss
+        oos_wealth = model_func(self.xtest)
+        oos_loss =  Entropy(oos_wealth, certainty_equiv, self.loss_param)
                     
         if self.Figure_IsUpdated:
-          self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, loss.numpy().squeeze(), \
-                                                          num_epoch, num_batch)
+          if oos_loss.numpy().squeeze() < min_loss:
+              min_loss = oos_loss.numpy().squeeze()
+              print(min_loss)
+
+          self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), \
+                                                          num_epoch, num_batch, min_loss)
           
           # This is needed to prevent the output signals from emitting faster than the system can plot a graph.
           # The performance is much better than emitting at fixed time intervals.
@@ -182,7 +191,7 @@ class MainWindow(QtWidgets.QMainWindow):
     # The order of code is important here: Make sure the emitted signals are connected
     # before actually running the Worker.
     self.Thread_RunDH.DH_outputs["PyQt_PyObject", "PyQt_PyObject", "PyQt_PyObject", \
-            "PyQt_PyObject", "double", "double"].connect(self.Update_Plots_Widget)
+            "PyQt_PyObject", "double", "double", "PyQt_PyObject"].connect(self.Update_Plots_Widget)
             
     # Define a top-level widget to hold everything
     self.w = QtGui.QWidget()
@@ -351,7 +360,10 @@ class MainWindow(QtWidgets.QMainWindow):
     # Initialize the PnL Histogram Widget.
     fig_PnL = pg.PlotWidget()
 
-    self.x_range = (self.PnL_BS.min()+self.price_BS[0,0], self.PnL_BS.max()+self.price_BS[0,0])
+    x_min = np.minimum(self.PnL_BS.min()+self.price_BS[0,0], -3)
+    x_max = np.maximum(self.PnL_BS.max()+self.price_BS[0,0], 3)
+
+    self.x_range = (x_min,x_max)
     self.BS_bins, self.bin_edges = np.histogram(self.PnL_BS+self.price_BS[0,0], bins = num_bins, range = self.x_range)
     self.width = (self.bin_edges[1] - self.bin_edges[0])/2.0
 
@@ -424,7 +436,7 @@ class MainWindow(QtWidgets.QMainWindow):
   
   # Update Plots - Black-Scholes vs Deep Hedging.
   def Update_Plots_Widget(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
-                                                          loss = None, num_epoch = None, num_batch = None):
+                                                          loss = None, num_epoch = None, num_batch = None, min_loss = None):
     if num_epoch == 1 and num_batch == 1:
       # Update PnL Histogram
       self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b', \
