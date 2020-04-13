@@ -82,7 +82,7 @@ class DH_Worker(QtCore.QThread):
     self.wait()
       
   def run_deep_hedge_algo(self, training_dataset = None, epochs = None, Ktrain = None, batch_size = None, \
-                              model = None, submodel = None, loss_param = None, learning_rate = None, xtest = None, \
+                              model = None, submodel = None, strategy_type = None, loss_param = None, learning_rate = None, xtest = None, \
                               initial_price_BS = None, width = None, I_range = None, x_range = None):
     self.training_dataset = training_dataset
     self.Ktrain = Ktrain
@@ -97,6 +97,7 @@ class DH_Worker(QtCore.QThread):
     self.I_range = I_range
     self.x_range = x_range
     self.learning_rate = learning_rate
+    self.strategy_type = strategy_type
     
     self.Figure_IsUpdated = True
     
@@ -154,8 +155,17 @@ class DH_Worker(QtCore.QThread):
           wealth = model_func(mini_batch)
           loss = Entropy(wealth, certainty_equiv, self.loss_param)
 
-        PnL_DH = model_func(self.xtest).numpy().squeeze() # Out-of-sample
-        DH_delta = submodel_func(np.expand_dims(self.I_range,axis=1)).numpy().squeeze()
+        oos_wealth = model_func(self.xtest)
+        PnL_DH = oos_wealth.numpy().squeeze() # Out-of-sample
+
+        submodel_delta_range = np.expand_dims(self.I_range,axis=1)
+        if self.strategy_type == "simple":
+            submodel_inputs = submodel_delta_range
+        elif self.strategy_type == "recurrent":
+            # Assume previous delta is ATM.
+            submodel_inputs = [submodel_delta_range, np.ones_like(submodel_delta_range)*0.5]
+        
+        DH_delta = submodel_func(submodel_inputs).numpy().squeeze()
         DH_bins, _ = np.histogram(PnL_DH+self.initial_price_BS, bins = num_bins, range = self.x_range)
         
         # Forward and backward passes
@@ -163,13 +173,12 @@ class DH_Worker(QtCore.QThread):
         optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
 
         # Compute Out-of-Sample Loss
-        oos_wealth = model_func(self.xtest)
         oos_loss =  Entropy(oos_wealth, certainty_equiv, self.loss_param)
                     
         if self.Figure_IsUpdated:
           if oos_loss.numpy().squeeze() < min_loss:
               min_loss = oos_loss.numpy().squeeze()
-              print(min_loss)
+              print("The best price is {:0.4} from epoch {} batch {}.".format(min_loss,int(num_epoch),int(num_batch)))
 
           self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), \
                                                           num_epoch, num_batch, min_loss)
@@ -303,7 +312,7 @@ class MainWindow(QtWidgets.QMainWindow):
       # Run the deep hedging algo in a separate thread.
       self.Thread_RunDH.run_deep_hedge_algo(training_dataset = self.training_dataset, epochs = self.epochs, \
                               Ktrain = self.Ktrain, batch_size = self.batch_size, model = self.model, \
-                              submodel = self.submodel, loss_param = self.loss_param, learning_rate = self.lr, xtest = self.xtest, \
+                              submodel = self.submodel, strategy_type = self.strategy_type, loss_param = self.loss_param, learning_rate = self.lr, xtest = self.xtest, \
                               initial_price_BS = self.price_BS[0][0], width = self.width, I_range = self.I_range, x_range = self.x_range)
 
   # Define action when the Pause button is clicked.
@@ -348,7 +357,7 @@ class MainWindow(QtWidgets.QMainWindow):
           outputs = self.model.layers[idx](outputs)
           break
         
-        if flag_add_layer_for_submodel:
+        if flag_add_layer:
             outputs = self.model.layers[idx](outputs)
               
       submodel = Model(inputs=inputs, outputs=outputs)
@@ -485,6 +494,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                                 
     print("\nRun Monte-Carlo Simulations for the Stock Price Process.\n")
     return self.stochastic_process.gen_path(self.maturity, self.N, self.nobs)
+    print("\n")
       
   def assemble_data(self):
     self.payoff_T = self.payoff_func(self.S[:,-1]) # Payoff of the call option
