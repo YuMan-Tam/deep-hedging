@@ -40,6 +40,9 @@ from default_params import Deep_Hedging_Params
 # Tensorflow settings
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
+# PyQtGraph Settings
+pg.setConfigOptions(antialias=False)
+
 # Default Parameters
 # European call option (short).
 calculation_date = ql.Date.todaysDate()
@@ -352,11 +355,15 @@ class MainWindow(QtWidgets.QMainWindow):
     self.BS_bins, self.bin_edges = np.histogram(self.PnL_BS+self.price_BS[0,0], bins = num_bins, range = self.x_range)
     self.width = (self.bin_edges[1] - self.bin_edges[0])/2.0
 
-    self.BS_hist = pg.BarGraphItem(x=self.bin_edges[:-2], height=self.BS_bins, width=self.width, brush='r')
-    fig_PnL.addItem(self.BS_hist)
+    self.BS_hist = pg.BarGraphItem(x=self.bin_edges[:-2], height=self.BS_bins, width=self.width, brush='r', \
+            name = "Red - Black-Scholes", antialias = False)
+    
     fig_PnL.setTitle("<font size='5'>Profit and Loss (PnL) Histogram</font>")
     fig_PnL.setLabels(left="<font size='4'>Frequency</font>", bottom="<font size='4'>Profit and Loss (PnL) </font>")
+    fig_PnL.addLegend()
     
+    fig_PnL.addItem(self.BS_hist)
+
     return fig_PnL
           
   # Draw Delta plot (PlotWidget) - Black-Scholes vs Deep Hedging.
@@ -389,6 +396,7 @@ class MainWindow(QtWidgets.QMainWindow):
     self.BS_delta_plot.setData(self.S_range, self.model_delta)
     
     fig_delta.addItem(self.BS_delta_plot)
+
     fig_delta.setTitle("<font size='5'>Delta Plot</font>")
     fig_delta.setLabels(left="<font size='4'>Delta</font>", bottom="<font size='4'>Stock Price</font>")
                         
@@ -418,7 +426,8 @@ class MainWindow(QtWidgets.QMainWindow):
                                                           loss = None, num_epoch = None, num_batch = None):
     if num_epoch == 1 and num_batch == 1:
       # Update PnL Histogram
-      self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b')
+      self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b', \
+              name = "Blue - Deep Hedging", antialias=False)
       self.fig_PnL.addItem(self.DH_hist)
 
       # Update the Delta plot
