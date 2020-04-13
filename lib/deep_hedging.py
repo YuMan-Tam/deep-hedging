@@ -22,7 +22,7 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
 	risk_free = None, dt = None, initial_wealth = 0.0, epsilon = 0.0, \
 	strategy_type = None, use_batch_norm = None, kernel_initializer = "he_uniform", \
 	activation_dense = "relu", activation_output = "linear", final_period_cost = False, \
-	output_type = "gui", loss_param = None):
+	output_type = "gui", loss_type = None, loss_param = None):
 		
 	# State variables.
 	prc = Input(shape=(1,), name = "prc_0")
