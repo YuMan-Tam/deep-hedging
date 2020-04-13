@@ -360,7 +360,8 @@ class MainWindow(QtWidgets.QMainWindow):
     
     fig_PnL.setTitle("<font size='5'>Profit and Loss (PnL) Histogram</font>")
     fig_PnL.setLabels(left="<font size='4'>Frequency</font>", bottom="<font size='4'>Profit and Loss (PnL) </font>")
-    fig_PnL.addLegend()
+    fig_PnL.addLegend(offset=(5,5))
+    fig_PnL.enableAutoRange()
     
     fig_PnL.addItem(self.BS_hist)
 
@@ -392,14 +393,14 @@ class MainWindow(QtWidgets.QMainWindow):
     
     fig_delta = pg.PlotWidget()
     
-    self.BS_delta_plot = pg.PlotCurveItem(pen = pg.mkPen(color="r", width=2.5))
+    self.BS_delta_plot = pg.PlotCurveItem(pen = pg.mkPen(color="r", width=2.5), name = "Black-Scholes")
     self.BS_delta_plot.setData(self.S_range, self.model_delta)
     
-    fig_delta.addItem(self.BS_delta_plot)
-
     fig_delta.setTitle("<font size='5'>Delta Plot</font>")
     fig_delta.setLabels(left="<font size='4'>Delta</font>", bottom="<font size='4'>Stock Price</font>")
-                        
+
+    fig_delta.addItem(self.BS_delta_plot)
+                            
     return fig_delta
   
       
@@ -421,7 +422,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     return fig_loss
   
-  # Update PnL histogram (PlotWidget) and Delta Plot (PlotWidget) - Black-Scholes vs Deep Hedging.
+  # Update Plots - Black-Scholes vs Deep Hedging.
   def Update_Plots_Widget(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
                                                           loss = None, num_epoch = None, num_batch = None):
     if num_epoch == 1 and num_batch == 1:
@@ -431,7 +432,7 @@ class MainWindow(QtWidgets.QMainWindow):
       self.fig_PnL.addItem(self.DH_hist)
 
       # Update the Delta plot
-      self.DH_delta_plot = pg.ScatterPlotItem(brush='b', size=5)
+      self.DH_delta_plot = pg.ScatterPlotItem(brush='b', size=5, name = "Deep Heding")
       self.DH_delta_plot.setData(self.S_range, DH_delta)
       self.fig_delta.addItem(self.DH_delta_plot)
       
