@@ -13,11 +13,11 @@ from tqdm import trange
 class BlackScholesProcess:
 	def __init__(self,s0 = None, sigma = None, risk_free = None, \
 					dividend = None, day_count = None, seed=0):
-		self.s0 = s0
-		self.sigma = sigma
-		self.risk_free = risk_free
-		self.dividend = dividend
-		self.day_count = day_count
+                self.s0 = s0
+                self.sigma = sigma
+                self.risk_free = risk_free
+                self.dividend = dividend
+                self.day_count = day_count
                 self.seed = seed
 		
 	def get_process(self, calculation_date = ql.Date.todaysDate()):
