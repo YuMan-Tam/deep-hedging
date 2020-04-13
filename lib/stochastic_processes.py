@@ -18,6 +18,7 @@ class BlackScholesProcess:
 		self.risk_free = risk_free
 		self.dividend = dividend
 		self.day_count = day_count
+                self.seed = seed
 		
 	def get_process(self, calculation_date = ql.Date.todaysDate()):
 		spot_handle = ql.QuoteHandle(ql.SimpleQuote(self.s0))
@@ -40,7 +41,7 @@ class BlackScholesProcess:
 
 	def gen_path(self, length = None, time_step = None, num_paths = None):
 		# The variable length is in the unit of one year.
-		rng = ql.GaussianRandomSequenceGenerator(ql.UniformRandomSequenceGenerator(time_step, ql.UniformRandomGenerator(seed)))
+		rng = ql.GaussianRandomSequenceGenerator(ql.UniformRandomSequenceGenerator(time_step, ql.UniformRandomGenerator(self.seed)))
 		seq = ql.GaussianMultiPathGenerator(self.get_process(), np.linspace(0,length,time_step+1), rng, False)
 		
 		value = np.zeros((num_paths, time_step+1))
