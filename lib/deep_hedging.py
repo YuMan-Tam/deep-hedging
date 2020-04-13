@@ -7,6 +7,8 @@ from tensorflow.keras.activations import tanh, relu, linear
 import tensorflow.keras.backend as K
 import tensorflow as tf
 import numpy as np
+from loss_metrics import Entropy, CVaR
+
 
 intitalizer_dict = { 
 	"he_normal": he_normal(),
@@ -20,7 +22,8 @@ bias_initializer=he_uniform()
 def Deep_Hedging_Model(N = None, d = None, m = None, \
 		risk_free = None, dt = None, initial_wealth = 0.0, epsilon = 0.0, \
 		strategy_type = None, use_batch_norm = None, kernel_initializer = "he_uniform", \
-		activation_dense = "relu", activation_output = "linear", final_period_cost = False):
+		activation_dense = "relu", activation_output = "linear", final_period_cost = False, \
+                output_type = "gui", loss_param = None):
 		
 	# State variables.
 	prc = Input(shape=(1,), name = "prc_0")
@@ -144,5 +147,19 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
 			inputs += [payoff]
 			
 			wealth = Add(name = "wealth_" + str(j))([wealth,payoff])
+
+        if output_type == "gui":
+	    return Model(inputs=inputs, outputs=wealth)
+        elif output_type == "colab":
+            w = tf.Variable(0.0, name = "certainty_equiv")
+
+            if strategy_type == "Entropy":
+                loss = Entropy(wealth,w,loss_param)
+            elif strategy_type == "CVaR":
+                loss = CVaR(wealth,w,loss_param)
+
+            model = Model(inputs=inputs, outputs=wealth)
+            model.add_loss(loss)
+        return model
+
 			
-	return Model(inputs=inputs, outputs=wealth)
