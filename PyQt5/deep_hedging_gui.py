@@ -391,7 +391,7 @@ class MainWindow(QtWidgets.QMainWindow):
   # Draw Delta plot (PlotWidget) - Black-Scholes vs Deep Hedging.
   # Assume the PnL_Hist_Widget ran first, so we don't need to run the model again.
   def Delta_Plot_Widget(self):
-    self.tau = self.days_from_today*self.dt
+    self.tau = (self.N-self.days_from_today)*self.dt
     
     self.min_S = self.S_test[0][:,self.days_from_today].min()
     self.max_S = self.S_test[0][:,self.days_from_today].max()
