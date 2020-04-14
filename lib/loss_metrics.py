@@ -10,3 +10,10 @@ def Entropy(wealth = None, w = None, loss_param = None):
 	_lambda = loss_param
 	# Entropy (exponential) risk measure
 	return (1/_lambda)*K.log(K.mean(K.exp(-_lambda*wealth)))
+
+def Loss(loss_type = None, wealth = None, loss_param = None):
+	if loss_type == "Entropy":
+		return Entropy(wealth, loss_param)
+	elif loss_type == "CVaR":
+		w = tf.Variable(0.0, name = "certainty_equiv")
+		return CVaR(wealth, w, loss_param)
