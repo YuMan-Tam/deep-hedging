@@ -111,9 +111,15 @@ class European_Call:
 		# a call option. The model delta from Quantlib is a long delta.
 		N = S.shape[1]-1
 		
-		PnL_BS = (np.multiply(S[:,0], -delta[:,0]) - \
-							np.abs(delta[:,0])*S[:,0]*epsilon)* \
-								np.exp(risk_free*dt)
+		PnL_BS = np.multiply(S[:,0], -delta[:,0]) \
+		
+		if cost_structure == "proportional":
+			PnL_BS -= np.abs(delta[:,0])*S[:,0]*epsilon)
+		elif cost_structure == "constant":
+			PnL_BS -= epsilon
+				
+		PnL_BS = PnL_BS*np.exp(risk_free*dt)
+		
 		for t in range(1, N):
 			PnL_BS += np.multiply(S[:,t], -delta[:,t] + delta[:,t-1])
 			
