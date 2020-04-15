@@ -114,7 +114,7 @@ class European_Call:
 		PnL_BS = np.multiply(S[:,0], -delta[:,0]) \
 		
 		if cost_structure == "proportional":
-			PnL_BS -= np.abs(delta[:,0])*S[:,0]*epsilon)
+			PnL_BS -= np.abs(delta[:,0])*S[:,0]*epsilon
 		elif cost_structure == "constant":
 			PnL_BS -= epsilon
 				
