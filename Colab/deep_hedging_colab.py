@@ -29,15 +29,13 @@ Original file is located at
 import sys, os
 sys.path.insert(0, os.getcwd() + "/../lib")
 
-from IPython.display import Math, HTML, clear_output
+from IPython.display import clear_output
 
 import numpy as np
 import QuantLib as ql
-import tensorflow as tf
 from scipy.stats import norm
 
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, \
-                                            ReduceLROnPlateau
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.compat.v1.keras.optimizers import Adam
 from tensorflow.keras.models import Model
 
@@ -46,7 +44,7 @@ import matplotlib.pyplot as plt
 from stochastic_processes import BlackScholesProcess
 from instruments import European_Call
 from deep_hedging import Deep_Hedging_Model
-from loss_metrics import Loss, Entropy, CVaR
+from loss_metrics import Loss
 from utilities import train_test_split
 
 # %load_ext autoreload
@@ -146,11 +144,11 @@ payoff_T = payoff_func(S[:,-1]) # Payoff of the call option
 
 trade_set =  np.stack((S),axis=1) # Trading set
 
-if information_set is "S":
+if information_set == "S":
   I =  np.stack((S),axis=1) # Information set
-elif information_set is "log_S":
+elif information_set == "log_S":
   I =  np.stack((np.log(S)),axis=1)
-elif information_set is "normalized_log_S":
+elif information_set == "normalized_log_S":
   I =  np.stack((np.log(S/S0)),axis=1)
 
 # Structure of xtrain:
@@ -202,141 +200,141 @@ model_simple.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
 clear_output()
 print("Finished running deep hedging algorithm! (Simple Network)")
 
-# #@title <font color='Blue'>**Run the Deep Hedging Algorithm (Recurrent Network)!**</font>
-# optimizer = Adam(learning_rate=lr)
+#@title <font color='Blue'>**Run the Deep Hedging Algorithm (Recurrent Network)!**</font>
+optimizer = Adam(learning_rate=lr)
 
-# # Setup and compile the model
-# model_recurrent = Deep_Hedging_Model(N=N, d=d+2, m=m, risk_free=risk_free, \
-#           dt = dt, strategy_type="recurrent", epsilon = epsilon, \
-#           use_batch_norm = use_batch_norm, kernel_initializer = kernel_initializer, \
-#           activation_dense = activation_dense, activation_output = activation_output, \
-#           final_period_cost = final_period_cost)
+# Setup and compile the model
+model_recurrent = Deep_Hedging_Model(N=N, d=d+2, m=m, risk_free=risk_free, \
+          dt = dt, strategy_type="recurrent", epsilon = epsilon, \
+          use_batch_norm = use_batch_norm, kernel_initializer = kernel_initializer, \
+          activation_dense = activation_dense, activation_output = activation_output, \
+          final_period_cost = final_period_cost)
 
-# loss = Loss("Entropy", model_recurrent.output, loss_param)
-# model_recurrent.add_loss(loss)
+loss = Loss("Entropy", model_recurrent.output, loss_param)
+model_recurrent.add_loss(loss)
 
-# model_recurrent.compile(optimizer=optimizer)
+model_recurrent.compile(optimizer=optimizer)
 
-# early_stopping = EarlyStopping(monitor="loss", \
-#           patience=10, min_delta=1e-4, restore_best_weights=True)
-# reduce_lr = ReduceLROnPlateau(monitor="loss", \
-#           factor=0.5, patience=2, min_delta=1e-3, verbose=0)
+early_stopping = EarlyStopping(monitor="loss", \
+          patience=10, min_delta=1e-4, restore_best_weights=True)
+reduce_lr = ReduceLROnPlateau(monitor="loss", \
+          factor=0.5, patience=2, min_delta=1e-3, verbose=0)
 
-# callbacks = [early_stopping, reduce_lr]
+callbacks = [early_stopping, reduce_lr]
 
-# # Fit the model.
-# model_recurrent.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
-#           validation_data=xtest, verbose=1)
+# Fit the model.
+model_recurrent.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
+          validation_data=xtest, verbose=1)
 
-# clear_output()
-# print("Finished running deep hedging algorithm! (Simple Network)")
+clear_output()
+print("Finished running deep hedging algorithm! (Simple Network)")
 
-# #@title <font color='Blue'>**Results: Option Prices**</font>
-# call = European_Call()
+#@title <font color='Blue'>**Results: Option Prices**</font>
+call = European_Call()
 
-# price_BS = call.get_BS_price(S = S_test[0], sigma = sigma, \
-#               risk_free = risk_free, dividend = dividend, K = strike, \
-#               exercise_date = maturity_date, \
-#               calculation_date = calculation_date, \
-#               day_count = day_count, dt = dt)
-# delta_BS = call.get_BS_delta(S = S_test[0], sigma = sigma, \
-#               risk_free = risk_free, dividend = dividend, K = strike, \
-#               exercise_date = maturity_date, \
-#               calculation_date = calculation_date, 
-#               day_count = day_count, dt = dt)
+price_BS = call.get_BS_price(S = S_test[0], sigma = sigma, \
+              risk_free = risk_free, dividend = dividend, K = strike, \
+              exercise_date = maturity_date, \
+              calculation_date = calculation_date, \
+              day_count = day_count, dt = dt)
+delta_BS = call.get_BS_delta(S = S_test[0], sigma = sigma, \
+              risk_free = risk_free, dividend = dividend, K = strike, \
+              exercise_date = maturity_date, \
+              calculation_date = calculation_date, 
+              day_count = day_count, dt = dt)
 
-# PnL_BS =  call.get_BS_PnL(S= S_test[0], \
-#               payoff= payoff_func(S_test[0][:,-1]), delta=delta_BS, \
-#               dt= dt, risk_free = risk_free, \
-#               final_period_cost=final_period_cost, epsilon=epsilon)
+PnL_BS =  call.get_BS_PnL(S= S_test[0], \
+              payoff= payoff_func(S_test[0][:,-1]), delta=delta_BS, \
+              dt= dt, risk_free = risk_free, \
+              final_period_cost=final_period_cost, epsilon=epsilon)
 
-# risk_neutral_price = \
-#     -option_payoff_test[0].mean()*np.exp(-risk_free*(N*dt))
-# nn_simple_price = model_simple.evaluate(xtest, batch_size=test_size, verbose=0)
-# nn_recurrent_price = model_recurrent.evaluate(xtest, batch_size=test_size, verbose=0)
+risk_neutral_price = \
+    -option_payoff_test[0].mean()*np.exp(-risk_free*(N*dt))
+nn_simple_price = model_simple.evaluate(xtest, batch_size=test_size, verbose=0)
+nn_recurrent_price = model_recurrent.evaluate(xtest, batch_size=test_size, verbose=0)
 
-# print("The Black-Scholes model price is %2.3f." % price_BS[0][0])
-# print("The Risk Neutral price is %2.3f." % risk_neutral_price)
-# print("The Deep Hedging (with simple network) price is %2.3f." % nn_simple_price)
-# print("The Deep Hedging (with recurrent network) price is %2.3f." % nn_recurrent_price)
+print("The Black-Scholes model price is %2.3f." % price_BS[0][0])
+print("The Risk Neutral price is %2.3f." % risk_neutral_price)
+print("The Deep Hedging (with simple network) price is %2.3f." % nn_simple_price)
+print("The Deep Hedging (with recurrent network) price is %2.3f." % nn_recurrent_price)
 
-# #@title <font color='Blue'>**Results: Black-Scholes PnL vs Deep Hedging PnL**</font>
-# bar1 = PnL_BS + price_BS[0][0]
-# bar2 = model_simple(xtest).numpy().squeeze() + price_BS[0][0]
+#@title <font color='Blue'>**Results: Black-Scholes PnL vs Deep Hedging PnL**</font>
+bar1 = PnL_BS + price_BS[0][0]
+bar2 = model_simple(xtest).numpy().squeeze() + price_BS[0][0]
 
-# # Plot Black-Scholes PnL and Deep Hedging PnL (with BS_price charged on both).
-# fig_PnL = plt.figure(dpi= 125, facecolor='w')
-# fig_PnL.suptitle("Black-Scholes PnL vs Deep Hedging PnL \n", \
-#       fontweight="bold")
-# ax = fig_PnL.add_subplot()
-# ax.set_title("Simple Network Structure with epsilon = " + str(epsilon), \
-#       fontsize=8)
-# ax.set_xlabel("PnL")
-# ax.set_ylabel("Frequency")
-# ax.hist((bar1,bar2), bins=30, \
-#           label=["Black-Scholes PnL", "Deep Hedging PnL"])
-# ax.legend()
-# plt.show()
+# Plot Black-Scholes PnL and Deep Hedging PnL (with BS_price charged on both).
+fig_PnL = plt.figure(dpi= 125, facecolor='w')
+fig_PnL.suptitle("Black-Scholes PnL vs Deep Hedging PnL \n", \
+      fontweight="bold")
+ax = fig_PnL.add_subplot()
+ax.set_title("Simple Network Structure with epsilon = " + str(epsilon), \
+      fontsize=8)
+ax.set_xlabel("PnL")
+ax.set_ylabel("Frequency")
+ax.hist((bar1,bar2), bins=30, \
+          label=["Black-Scholes PnL", "Deep Hedging PnL"])
+ax.legend()
+plt.show()
 
-# #@title <font color='Blue'>**Results: Black-Scholes Delta vs Deep Hedging Delta.**</font>
-# for days_from_today in (1,15,29):
-#   tau = (N-days_from_today)*dt
+#@title <font color='Blue'>**Results: Black-Scholes Delta vs Deep Hedging Delta.**</font>
+for days_from_today in (1,15,29):
+  tau = (N-days_from_today)*dt
     
-#   min_S = S_test[0][:,days_from_today].min()
-#   max_S = S_test[0][:,days_from_today].max()
-#   S_range = np.linspace(min_S,max_S,101)
+  min_S = S_test[0][:,days_from_today].min()
+  max_S = S_test[0][:,days_from_today].max()
+  S_range = np.linspace(min_S,max_S,101)
 
-#   # Attention: Need to transform it to be consistent with the information set.
-#   if information_set is "S":
-#     I_range =  S_range # Information set
-#   elif information_set is "log_S":
-#     I_range =  np.log(S_range)
-#   elif information_set is "normalized_log_S":
-#     I_range =  np.log(S_range/S0)        
+  # Attention: Need to transform it to be consistent with the information set.
+  if information_set == "S":
+    I_range =  S_range # Information set
+  elif information_set == "log_S":
+    I_range =  np.log(S_range)
+  elif information_set == "normalized_log_S":
+    I_range =  np.log(S_range/S0)        
       
-#   # Compute Black-Scholes delta for S_range.
-#   # Reference: https://en.wikipedia.org/wiki/Greeks_(finance)
-#   d1 = (np.log(S_range) - np.log(strike) + \
-#         (risk_free - dividend + (sigma**2)/2)*tau) \
-#               / (sigma*np.sqrt(tau))  
+  # Compute Black-Scholes delta for S_range.
+  # Reference: https://en.wikipedia.org/wiki/Greeks_(finance)
+  d1 = (np.log(S_range) - np.log(strike) + \
+        (risk_free - dividend + (sigma**2)/2)*tau) \
+              / (sigma*np.sqrt(tau))  
                 
-#   model_delta = norm.cdf(d1)*np.exp(-dividend*tau)
+  model_delta = norm.cdf(d1)*np.exp(-dividend*tau)
 
-#   submodel = Model(model_simple.get_layer("dense_0_" + \
-#         str(days_from_today)).input, \
-#         model_simple.get_layer("delta_" + \
-#         str(days_from_today)).output)
-#   nn_delta = submodel(I_range)
+  submodel = Model(model_simple.get_layer("dense_0_" + \
+        str(days_from_today)).input, \
+        model_simple.get_layer("delta_" + \
+        str(days_from_today)).output)
+  nn_delta = submodel(I_range)
 
-#   # Create a plot of Black-Scholes delta against deep hedging delta.
-#   fig_delta = plt.figure(dpi= 125, facecolor='w')
-#   fig_delta.suptitle("Black-Scholes Delta vs Deep Hedging Delta \n", \
-#         fontweight="bold")
-#   ax_delta = fig_delta.add_subplot()
-#   ax_delta.set_title("Simple Network Structure with " + \
-#               "t=" + str(days_from_today) + ", " + \
-#                 "epsilon=" + str(epsilon), \
-#                 fontsize=8)
-#   ax_delta.set_xlabel("Price of the Underlying Asset")
-#   ax_delta.set_ylabel("Delta")
-#   ax_delta.plot(S_range, model_delta, label="Black-Scholes Delta")
-#   ax_delta.scatter(S_range,nn_delta, c="red", s=2, label="Deep Hedging Delta")
-#   ax_delta.legend()
-#   plt.show()
+  # Create a plot of Black-Scholes delta against deep hedging delta.
+  fig_delta = plt.figure(dpi= 125, facecolor='w')
+  fig_delta.suptitle("Black-Scholes Delta vs Deep Hedging Delta \n", \
+        fontweight="bold")
+  ax_delta = fig_delta.add_subplot()
+  ax_delta.set_title("Simple Network Structure with " + \
+              "t=" + str(days_from_today) + ", " + \
+                "epsilon=" + str(epsilon), \
+                fontsize=8)
+  ax_delta.set_xlabel("Price of the Underlying Asset")
+  ax_delta.set_ylabel("Delta")
+  ax_delta.plot(S_range, model_delta, label="Black-Scholes Delta")
+  ax_delta.scatter(S_range,nn_delta, c="red", s=2, label="Deep Hedging Delta")
+  ax_delta.legend()
+  plt.show()
 
-# #@title <font color='Blue'>**Results: Simple vs Recurrent Network**</font>
-# bar1 = model_simple(xtest).numpy().squeeze() + price_BS[0][0]
-# bar2 = model_recurrent(xtest).numpy().squeeze() + price_BS[0][0]
+#@title <font color='Blue'>**Results: Simple vs Recurrent Network**</font>
+bar1 = model_simple(xtest).numpy().squeeze() + price_BS[0][0]
+bar2 = model_recurrent(xtest).numpy().squeeze() + price_BS[0][0]
 
-# # Plot Simple Network PnL vs Recurrent Network PnL (with BS_price charged on both).
-# fig_nn = plt.figure(dpi= 125, facecolor='w')
-# fig_nn.suptitle("Simple Network PnL vs Recurrent Network PnL \n ", \
-#       fontweight="bold")
-# ax = fig_nn.add_subplot()
-# ax.set_title("epsilon = " + str(epsilon), fontsize=8)
-# ax.set_xlabel("PnL")
-# ax.set_ylabel("Frequency")
-# ax.hist((bar1,bar2), bins=30, \
-#       label=["Simple Network PnL", "Recurrent Network PnL"])
-# ax.legend()
-# plt.show()
+# Plot Simple Network PnL vs Recurrent Network PnL (with BS_price charged on both).
+fig_nn = plt.figure(dpi= 125, facecolor='w')
+fig_nn.suptitle("Simple Network PnL vs Recurrent Network PnL \n ", \
+      fontweight="bold")
+ax = fig_nn.add_subplot()
+ax.set_title("epsilon = " + str(epsilon), fontsize=8)
+ax.set_xlabel("PnL")
+ax.set_ylabel("Frequency")
+ax.hist((bar1,bar2), bins=30, \
+      label=["Simple Network PnL", "Recurrent Network PnL"])
+ax.legend()
+plt.show()
