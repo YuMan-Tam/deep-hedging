@@ -172,34 +172,34 @@ test_size = int(Ktrain*Ktest_ratio)
 
 print("Finish preparing data!")
 
-#@title <font color='Blue'>**Run the Deep Hedging Algorithm (Simple Network)!**</font>
-optimizer = Adam(learning_rate=lr)
+# #@title <font color='Blue'>**Run the Deep Hedging Algorithm (Simple Network)!**</font>
+# optimizer = Adam(learning_rate=lr)
 
-# Setup and compile the model
-model_simple = Deep_Hedging_Model(N=N, d=d+2, m=m, risk_free=risk_free, \
-          dt = dt, strategy_type="simple", epsilon = epsilon, \
-          use_batch_norm = use_batch_norm, kernel_initializer = kernel_initializer, \
-          activation_dense = activation_dense, activation_output = activation_output, \
-          final_period_cost = final_period_cost)
+# # Setup and compile the model
+# model_simple = Deep_Hedging_Model(N=N, d=d+2, m=m, risk_free=risk_free, \
+#           dt = dt, strategy_type="simple", epsilon = epsilon, \
+#           use_batch_norm = use_batch_norm, kernel_initializer = kernel_initializer, \
+#           activation_dense = activation_dense, activation_output = activation_output, \
+#           final_period_cost = final_period_cost)
 
-loss = Loss("Entropy", model_simple.output, loss_param)
-model_simple.add_loss(loss)
+# loss = Loss("Entropy", model_simple.output, loss_param)
+# model_simple.add_loss(loss)
 
-model_simple.compile(optimizer=optimizer)
+# model_simple.compile(optimizer=optimizer)
 
-early_stopping = EarlyStopping(monitor="loss", \
-          patience=10, min_delta=1e-4, restore_best_weights=True)
-reduce_lr = ReduceLROnPlateau(monitor="loss", \
-          factor=0.5, patience=2, min_delta=1e-3, verbose=0)
+# early_stopping = EarlyStopping(monitor="loss", \
+#           patience=10, min_delta=1e-4, restore_best_weights=True)
+# reduce_lr = ReduceLROnPlateau(monitor="loss", \
+#           factor=0.5, patience=2, min_delta=1e-3, verbose=0)
 
-callbacks = [early_stopping, reduce_lr]
+# callbacks = [early_stopping, reduce_lr]
 
-# Fit the model.
-model_simple.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
-          validation_data=xtest, verbose=1)
+# # Fit the model.
+# model_simple.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
+#           validation_data=xtest, verbose=1)
 
-clear_output()
-print("Finished running deep hedging algorithm! (Simple Network)")
+# clear_output()
+# print("Finished running deep hedging algorithm! (Simple Network)")
 
 #@title <font color='Blue'>**Run the Deep Hedging Algorithm (Recurrent Network)!**</font>
 optimizer = Adam(learning_rate=lr)
@@ -228,7 +228,7 @@ model_recurrent.fit(x=xtrain, batch_size=batch_size, epochs=epochs, \
           validation_data=xtest, verbose=1)
 
 clear_output()
-print("Finished running deep hedging algorithm! (Simple Network)")
+print("Finished running deep hedging algorithm! (Recurrent Network)")
 
 #@title <font color='Blue'>**Results: Option Prices**</font>
 call = European_Call()
@@ -277,63 +277,63 @@ ax.hist((bar1,bar2), bins=30, \
 ax.legend()
 plt.show()
 
-#@title <font color='Blue'>**Results: Black-Scholes Delta vs Deep Hedging Delta.**</font>
-for days_from_today in (1,15,29):
-  tau = (N-days_from_today)*dt
+# #@title <font color='Blue'>**Results: Black-Scholes Delta vs Deep Hedging Delta.**</font>
+# for days_from_today in (1,15,29):
+#   tau = (N-days_from_today)*dt
     
-  min_S = S_test[0][:,days_from_today].min()
-  max_S = S_test[0][:,days_from_today].max()
-  S_range = np.linspace(min_S,max_S,101)
+#   min_S = S_test[0][:,days_from_today].min()
+#   max_S = S_test[0][:,days_from_today].max()
+#   S_range = np.linspace(min_S,max_S,101)
 
-  # Attention: Need to transform it to be consistent with the information set.
-  if information_set == "S":
-    I_range =  S_range # Information set
-  elif information_set == "log_S":
-    I_range =  np.log(S_range)
-  elif information_set == "normalized_log_S":
-    I_range =  np.log(S_range/S0)        
+#   # Attention: Need to transform it to be consistent with the information set.
+#   if information_set == "S":
+#     I_range =  S_range # Information set
+#   elif information_set == "log_S":
+#     I_range =  np.log(S_range)
+#   elif information_set == "normalized_log_S":
+#     I_range =  np.log(S_range/S0)        
       
-  # Compute Black-Scholes delta for S_range.
-  # Reference: https://en.wikipedia.org/wiki/Greeks_(finance)
-  d1 = (np.log(S_range) - np.log(strike) + \
-        (risk_free - dividend + (sigma**2)/2)*tau) \
-              / (sigma*np.sqrt(tau))  
+#   # Compute Black-Scholes delta for S_range.
+#   # Reference: https://en.wikipedia.org/wiki/Greeks_(finance)
+#   d1 = (np.log(S_range) - np.log(strike) + \
+#         (risk_free - dividend + (sigma**2)/2)*tau) \
+#               / (sigma*np.sqrt(tau))  
                 
-  model_delta = norm.cdf(d1)*np.exp(-dividend*tau)
+#   model_delta = norm.cdf(d1)*np.exp(-dividend*tau)
 
-  submodel = Delta_SubModel(model = model_simple, \
-                    days_from_today = days_from_today)
-  nn_delta = submodel(I_range)
+#   submodel = Delta_SubModel(model = model_simple, \
+#                     days_from_today = days_from_today)
+#   nn_delta = submodel(I_range)
 
-  # Create a plot of Black-Scholes delta against deep hedging delta.
-  fig_delta = plt.figure(dpi= 125, facecolor='w')
-  fig_delta.suptitle("Black-Scholes Delta vs Deep Hedging Delta \n", \
-        fontweight="bold")
-  ax_delta = fig_delta.add_subplot()
-  ax_delta.set_title("Simple Network Structure with " + \
-              "t=" + str(days_from_today) + ", " + \
-                "epsilon=" + str(epsilon), \
-                fontsize=8)
-  ax_delta.set_xlabel("Price of the Underlying Asset")
-  ax_delta.set_ylabel("Delta")
-  ax_delta.plot(S_range, model_delta, label="Black-Scholes Delta")
-  ax_delta.scatter(S_range,nn_delta, c="red", s=2, label="Deep Hedging Delta")
-  ax_delta.legend()
-  plt.show()
+#   # Create a plot of Black-Scholes delta against deep hedging delta.
+#   fig_delta = plt.figure(dpi= 125, facecolor='w')
+#   fig_delta.suptitle("Black-Scholes Delta vs Deep Hedging Delta \n", \
+#         fontweight="bold")
+#   ax_delta = fig_delta.add_subplot()
+#   ax_delta.set_title("Simple Network Structure with " + \
+#               "t=" + str(days_from_today) + ", " + \
+#                 "epsilon=" + str(epsilon), \
+#                 fontsize=8)
+#   ax_delta.set_xlabel("Price of the Underlying Asset")
+#   ax_delta.set_ylabel("Delta")
+#   ax_delta.plot(S_range, model_delta, label="Black-Scholes Delta")
+#   ax_delta.scatter(S_range,nn_delta, c="red", s=2, label="Deep Hedging Delta")
+#   ax_delta.legend()
+#   plt.show()
 
-#@title <font color='Blue'>**Results: Simple vs Recurrent Network**</font>
-bar1 = model_simple(xtest).numpy().squeeze() + price_BS[0][0]
-bar2 = model_recurrent(xtest).numpy().squeeze() + price_BS[0][0]
+# #@title <font color='Blue'>**Results: Simple vs Recurrent Network**</font>
+# bar1 = model_simple(xtest).numpy().squeeze() + price_BS[0][0]
+# bar2 = model_recurrent(xtest).numpy().squeeze() + price_BS[0][0]
 
-# Plot Simple Network PnL vs Recurrent Network PnL (with BS_price charged on both).
-fig_nn = plt.figure(dpi= 125, facecolor='w')
-fig_nn.suptitle("Simple Network PnL vs Recurrent Network PnL \n ", \
-      fontweight="bold")
-ax = fig_nn.add_subplot()
-ax.set_title("epsilon = " + str(epsilon), fontsize=8)
-ax.set_xlabel("PnL")
-ax.set_ylabel("Frequency")
-ax.hist((bar1,bar2), bins=30, \
-      label=["Simple Network PnL", "Recurrent Network PnL"])
-ax.legend()
-plt.show()
+# # Plot Simple Network PnL vs Recurrent Network PnL (with BS_price charged on both).
+# fig_nn = plt.figure(dpi= 125, facecolor='w')
+# fig_nn.suptitle("Simple Network PnL vs Recurrent Network PnL \n ", \
+#       fontweight="bold")
+# ax = fig_nn.add_subplot()
+# ax.set_title("epsilon = " + str(epsilon), fontsize=8)
+# ax.set_xlabel("PnL")
+# ax.set_ylabel("Frequency")
+# ax.hist((bar1,bar2), bins=30, \
+#       label=["Simple Network PnL", "Recurrent Network PnL"])
+# ax.legend()
+# plt.show()

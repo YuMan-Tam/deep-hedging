@@ -83,7 +83,8 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
         final_period_cost = False, strategy_type = None, use_batch_norm = None, \
         kernel_initializer = "he_uniform", \
         activation_dense = "relu", activation_output = "linear", 
-        delta_constraint = None, share_stretegy_across_time = False):
+        delta_constraint = None, share_stretegy_across_time = False, 
+        cost_structure = "proportional"):
         
     # State variables.
     prc = Input(shape=(1,), name = "prc_0")
@@ -101,8 +102,9 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
                     # Tensorflow hack to deal with the dimension problem.
                     #   Strategy at t = -1 should be 0. 
                     # There is probably a better way but this works.
-                    #strategy = Lambda(lambda x: x*0.0)(prc) # Try constant tensor with shape (1,)
-                    strategy = tf.constant([0.0])
+                    # Constant tensor doesn't work.
+                    strategy = Lambda(lambda x: x*0.0)(prc)
+
                 helper1 = Concatenate()([information_set,strategy])
 
             # Determine if the strategy function depends on time t or not.
@@ -135,12 +137,16 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
                 delta_strategy = strategyhelper
             else:
                 delta_strategy = Subtract(name = "diff_strategy_" + str(j))([strategyhelper, strategy])
-                
-            # Proportional transaction cost
-            absolutechanges = Lambda(lambda x : K.abs(x), name = "absolutechanges_" + str(j))(delta_strategy)
-            costs = Dot(axes=1)([absolutechanges,prc])
-            costs = Lambda(lambda x : epsilon*x, name = "cost_" + str(j))(costs)
             
+            if cost_structure == "proportional": 
+                # Proportional transaction cost
+                absolutechanges = Lambda(lambda x : K.abs(x), name = "absolutechanges_" + str(j))(delta_strategy)
+                costs = Dot(axes=1)([absolutechanges,prc])
+                costs = Lambda(lambda x : epsilon*x, name = "cost_" + str(j))(costs)
+            elif cost_structure == "constant":
+                # Tensorflow hack..
+                costs = Lambda(lambda x : epsilon + x*0.0)(prc)
+                    
             if j == 0:
                 wealth = Lambda(lambda x : initial_wealth - x, name = "costDot_" + str(j))(costs)
             else:
@@ -169,12 +175,16 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
             # The paper assumes no transaction costs for the final period 
             # when the position is liquidated.
             if final_period_cost:
-                # Proportional transaction cost
-                absolutechanges = Lambda(lambda x : K.abs(x), name = "absolutechanges_" + str(j))(strategy)
-                costs = Dot(axes=1)([absolutechanges,prc])
-                costs = Lambda(lambda x : epsilon*x, name = "cost_" + str(j))(costs)
+                if cost_structure == "proportional":
+                    # Proportional transaction cost
+                    absolutechanges = Lambda(lambda x : K.abs(x), name = "absolutechanges_" + str(j))(strategy)
+                    costs = Dot(axes=1)([absolutechanges,prc])
+                    costs = Lambda(lambda x : epsilon*x, name = "cost_" + str(j))(costs)
+                elif cost_structure == "constant":
+                    # Tensorflow hack..
+                    costs = Lambda(lambda x : epsilon + x*0.0)(prc)
+
                 wealth = Subtract(name = "costDot_" + str(j))([wealth, costs])
-            
             # Wealth for the final period
             # -delta_strategy = strategy_t
             mult = Dot(axes=1)([strategy, prc])
