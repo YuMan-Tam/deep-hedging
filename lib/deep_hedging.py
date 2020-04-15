@@ -72,7 +72,7 @@ class Strategy_Layer(tf.keras.layers.Layer):
                     if self.delta_constraint is not None:
                         output = Activation(self.activation_output)(output)
                         delta_min, delta_max = self.delta_constraint
-                        output = Lambda(lambda x : (delta_max-delta_min)*x + delta_max)(output)
+                        output = Lambda(lambda x : (delta_max-delta_min)*x + delta_min)(output)
                     else:
                         output = Activation(self.activation_output)(output)
         
