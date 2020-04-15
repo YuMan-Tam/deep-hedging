@@ -200,13 +200,14 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
 def Delta_SubModel(model = None, days_from_today = None, share_stretegy_across_time = False, strategy_type = "simple"):
     if strategy_type == "simple":
         inputs = model.get_layer("delta_" + str(days_from_today)).input
+        intermediate_inputs = inputs
     elif strategy_type == "recurrent":
         inputs = [Input(1,), Input(1,)]
-        inputs = Concatenate()(inputs)
+        intermediate_inputs = Concatenate()(inputs)
         
     if not share_stretegy_across_time:
-        outputs = model.get_layer("delta_" + str(days_from_today))(inputs)
+        outputs = model.get_layer("delta_" + str(days_from_today))(intermediate_inputs)
     else:
-        outputs = model.get_layer("delta_0")(inputs)
+        outputs = model.get_layer("delta_0")(intermediate_inputs)
         
     return Model(inputs, outputs)

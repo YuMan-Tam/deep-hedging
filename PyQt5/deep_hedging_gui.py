@@ -344,9 +344,10 @@ class MainWindow(QtWidgets.QMainWindow):
     elif self.strategy_type == "recurrent":
       # For "recurrent", the information set is price as well as the past delta.
       inputs = [Input(1,), Input(1,)]
-      inputs = Concatenate()(inputs)
       
-      outputs = self.model.get_layer("delta_" + str(self.days_from_today))(inputs)
+      intermediate_inputs = Concatenate()(inputs)
+     
+      outputs = self.model.get_layer("delta_" + str(self.days_from_today))(intermediate_inputs)
               
       submodel = Model(inputs=inputs, outputs=outputs)
 
