@@ -101,8 +101,8 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
                     # Tensorflow hack to deal with the dimension problem.
                     #   Strategy at t = -1 should be 0. 
                     # There is probably a better way but this works.
-                    strategy = Lambda(lambda x: x*0.0)(prc)
-                
+                    #strategy = Lambda(lambda x: x*0.0)(prc) # Try constant tensor with shape (1,)
+                    strategy = tf.constant([0.0])
                 helper1 = Concatenate()([information_set,strategy])
 
             # Determine if the strategy function depends on time t or not.
