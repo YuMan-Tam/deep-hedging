@@ -106,7 +106,7 @@ class European_Call:
 			return np.multiply(S, np.sqrt(T))*stats.norm.pdf(d1, 0.0, 1.0)
 			
 	def get_BS_PnL(self, S = None, payoff = None, delta = None, dt = None, risk_free = None, \
-									final_period_cost = None, epsilon = None):
+									final_period_cost = None, epsilon = None, cost_structure="proportional"):
 		# Compute Black-Scholes PnL (for a short position, i.e. the Bank sells
 		# a call option. The model delta from Quantlib is a long delta.
 		N = S.shape[1]-1
