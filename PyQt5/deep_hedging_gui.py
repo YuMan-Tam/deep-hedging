@@ -338,27 +338,15 @@ class MainWindow(QtWidgets.QMainWindow):
   def Define_DH_Delta_Strategy_Model(self):
     if self.strategy_type == "simple":
       # Set up the sub-model that outputs the delta.
-      submodel = Model(self.model.get_layer("dense_0_" + \
+      submodel = Model(self.model.get_layer("delta_" + \
                           str(self.days_from_today)).input, self.model.get_layer("delta_" + \
                           str(self.days_from_today)).output)
     elif self.strategy_type == "recurrent":
       # For "recurrent", the information set is price as well as the past delta.
       inputs = [Input(1,), Input(1,)]
+      inputs = Concatenate()(inputs)
       
-      outputs = Concatenate()(inputs)
-
-      flag_add_layer = False
-      
-      num_layers = len(self.model.layers)
-      for idx in range(num_layers):
-        if self.model.layers[idx].name == "dense_0_" + str(self.days_from_today):
-          flag_add_layer = True
-        elif self.model.layers[idx].name == "delta_15":
-          outputs = self.model.layers[idx](outputs)
-          break
-        
-        if flag_add_layer:
-            outputs = self.model.layers[idx](outputs)
+      outputs = self.model.get_layer("delta_" + + str(self.days_from_today))(inputs)
               
       submodel = Model(inputs=inputs, outputs=outputs)
 
