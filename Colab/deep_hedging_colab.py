@@ -33,6 +33,7 @@ from IPython.display import clear_output
 
 import numpy as np
 import QuantLib as ql
+import tensorflow as tf
 from scipy.stats import norm
 
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
@@ -43,7 +44,7 @@ import matplotlib.pyplot as plt
 
 from stochastic_processes import BlackScholesProcess
 from instruments import European_Call
-from deep_hedging import Deep_Hedging_Model
+from deep_hedging import Deep_Hedging_Model, Delta_SubModel
 from loss_metrics import Loss
 from utilities import train_test_split
 
@@ -300,10 +301,8 @@ for days_from_today in (1,15,29):
                 
   model_delta = norm.cdf(d1)*np.exp(-dividend*tau)
 
-  submodel = Model(model_simple.get_layer("dense_0_" + \
-        str(days_from_today)).input, \
-        model_simple.get_layer("delta_" + \
-        str(days_from_today)).output)
+  submodel = Delta_SubModel(model = model_simple, \
+                    days_from_today = days_from_today)
   nn_delta = submodel(I_range)
 
   # Create a plot of Black-Scholes delta against deep hedging delta.

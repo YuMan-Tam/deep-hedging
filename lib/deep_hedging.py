@@ -186,3 +186,15 @@ def Deep_Hedging_Model(N = None, d = None, m = None, \
             
             wealth = Add(name = "wealth_" + str(j))([wealth,payoff])
     return Model(inputs=inputs, outputs=wealth)
+
+def Delta_SubModel(model = None, days_from_today = None, share_stretegy_across_time = False):
+    if not share_stretegy_across_time:
+        submodel = Model(model.get_layer("delta_" + \
+            str(days_from_today)).input, \
+            model.get_layer("delta_" + \
+            str(days_from_today)).output)
+    else:
+        submodel = Model(model.get_layer("delta_0").input, \
+            model.get_layer("delta_0".output))
+        
+    return submodel
