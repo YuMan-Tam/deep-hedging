@@ -346,7 +346,7 @@ class MainWindow(QtWidgets.QMainWindow):
       inputs = [Input(1,), Input(1,)]
       inputs = Concatenate()(inputs)
       
-      outputs = self.model.get_layer("delta_" + + str(self.days_from_today))(inputs)
+      outputs = self.model.get_layer("delta_" + str(self.days_from_today))(inputs)
               
       submodel = Model(inputs=inputs, outputs=outputs)
 
