@@ -115,13 +115,21 @@ class European_Call:
 							np.abs(delta[:,0])*S[:,0]*epsilon)* \
 								np.exp(risk_free*dt)
 		for t in range(1, N):
-			PnL_BS += np.multiply(S[:,t], -delta[:,t] + delta[:,t-1]) - \
-									 np.abs(delta[:,t] -delta[:,t-1])*S[:,t]*epsilon
+			PnL_BS += np.multiply(S[:,t], -delta[:,t] + delta[:,t-1])
+			
+			if cost_structure == "proportional":
+				PnL_BS -= np.abs(delta[:,t] -delta[:,t-1])*S[:,t]*epsilon
+			elif cost_structure == "constant":
+				PnL_BS -= epsilon
+				
 			PnL_BS = PnL_BS*np.exp(risk_free*dt)
 
 		PnL_BS += np.multiply(S[:,N],delta[:,N-1]) + payoff 
 		
 		if final_period_cost:
-			PnL_BS -= np.abs(delta[:,N-1])*S[:,N]*epsilon
-			
+			if cost_structure == "proportional":
+				PnL_BS -= np.abs(delta[:,N-1])*S[:,N]*epsilon
+			elif cost_structure == "constant":
+				PnL_BS -= epsilon
+				
 		return PnL_BS
