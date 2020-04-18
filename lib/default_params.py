@@ -24,8 +24,8 @@ def Deep_Hedging_Params():
 					]},
 					{'name': 'Network Structure', 'type': 'group', 'children': [
 						{'name': 'Network Type', 'type': 'list', 'values': {"Simple": "simple", "Recurrent": "recurrent"}, "default": "simple"},
-            {'name': 'Number of Hidden Layers', 'type': 'int', 'value': 3},
-            {'name': 'Number of Neurons', 'type': 'int', 'value': 15},
+            {'name': 'Number of Hidden Layers', 'type': 'int', 'value': 2},
+            {'name': 'Number of Neurons', 'type': 'int', 'value': 10},
 					]},
 					{'name': 'Learning Parameters', 'type': 'group', 'children': [
             {'name': 'Learning Rate', 'type': 'float', 'value': 1e-2},

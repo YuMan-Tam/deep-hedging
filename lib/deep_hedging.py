@@ -67,7 +67,8 @@ class Strategy_Layer(tf.keras.layers.Layer):
 					 
                 if self.activation_output == "leaky_relu":
                     output = LeakyReLU()(output)
-                elif self.activation_output == "sigmoid":
+                elif self.activation_output == "sigmoid" or self.activation_output == "tanh" or \
+                     self.activation_output == "hard_sigmoid":
                     # Enforcing hedge constraints
                     if self.delta_constraint is not None:
                         output = Activation(self.activation_output)(output)

@@ -64,8 +64,14 @@ use_batch_norm = False
 kernel_initializer = "he_uniform"
 
 activation_dense = "leaky_relu"
-activation_output = "sigmoid"
+activation_output = "leaky_relu"
 final_period_cost = False
+
+# Reducing learning rate
+reduce_lr_param = {"patience" : 2, "min_delta" : 1e-3, "factor" : 0.5}
+
+# Early stopping
+early_stopping_param = {"patience": 10, "min_delta": 1e-4}
 
 # Number of bins to plot for the PnL histograms.
 num_bins = 30
@@ -82,7 +88,7 @@ class DH_Worker(QtCore.QThread):
     self.wait()
       
   def run_deep_hedge_algo(self, training_dataset = None, epochs = None, Ktrain = None, batch_size = None, \
-                              model = None, submodel = None, strategy_type = None, loss_param = None, learning_rate = None, xtest = None, \
+                              model = None, submodel = None, strategy_type = None, loss_param = None, learning_rate = None, xtest = None, xtrain= None, \
                               initial_price_BS = None, width = None, I_range = None, x_range = None):
     self.training_dataset = training_dataset
     self.Ktrain = Ktrain
@@ -94,11 +100,12 @@ class DH_Worker(QtCore.QThread):
     self.width = width
     self.epochs = epochs
     self.xtest = xtest
+    self.xtrain = xtrain
     self.I_range = I_range
     self.x_range = x_range
     self.learning_rate = learning_rate
     self.strategy_type = strategy_type
-    
+
     self.Figure_IsUpdated = True
     
     self.start()
@@ -118,15 +125,35 @@ class DH_Worker(QtCore.QThread):
         return False
     else:
         return True
+
+  def Reduce_Learning_Rate(self, num_epoch, loss):
+    # Extract in-sample loss from the previous epoch. Comparison starts in epoch 2 and the index for epoch 1 is 0 -> -2
+    last_loss = self.loss_record[num_epoch-2,1]
+    if last_loss - loss < reduce_lr_param["min_delta"]:
+        self.reduce_lr_counter += 1
+
+    if self.reduce_lr_counter > reduce_lr_param["patience"]:
+        self.learning_rate = self.learning_rate * reduce_lr_param["factor"]
+        self.optimizer.learning_rate = self.learning_rate
+        print("The learning rate is reduced to {}".format(self.learning_rate))
+        self.reduce_lr_counter = 0
+
+  def Early_Stopping(self, num_epoch, loss):
+    last_loss = self.loss_record[num_epoch-2,1]
+    if last_loss - loss < early_stopping_param["min_delta"]:
+        self.early_stopping_counter +=1
       
   def run(self):
+    self.reduce_lr_counter = 0
+    self.early_stopping_counter = 0
+
     certainty_equiv = tf.Variable(0.0, name = "certainty_equiv")
     
     # Accelerator Function.
     model_func = tf.function(self.model)
     submodel_func = tf.function(self.submodel)
     
-    optimizer = Adam(learning_rate=self.learning_rate)
+    self.optimizer = Adam(learning_rate=self.learning_rate)
     
     num_epoch = 0
     min_loss = 999
@@ -142,11 +169,30 @@ class DH_Worker(QtCore.QThread):
         try:
           mini_batch = mini_batch_iter.next()
         except:
-          num_batch = 0
-          num_epoch += 1 
-          
+          # Reduce learning rates and Early Stopping are based on in-sample losses calculated once per epoch.
+          in_sample_wealth = model_func(self.xtrain)
+          in_sample_loss = Entropy(in_sample_wealth,certainty_equiv,self.loss_param)
+ 
+          if num_epoch == 1:
+            self.loss_record = np.array([num_epoch, in_sample_loss],ndmin=2)
+          elif num_epoch > 1:
+            self.Reduce_Learning_Rate(num_epoch, in_sample_loss)
+            self.loss_record = np.vstack([self.loss_record, np.array([num_epoch,in_sample_loss])])
+            
+            self.Early_Stopping(num_epoch,in_sample_loss)
+            if self.early_stopping_counter > early_stopping_param["patience"]:
+                print(early_stopping_param["patience"])
+                print("The difference in losses are less than {} in {} consecutive epochs. We achieved convergence.".format(early_stopping_param["min_delta"], self.early_stopping_counter))
+                break
+
           mini_batch_iter = self.training_dataset.shuffle(self.Ktrain).batch(self.batch_size).__iter__()
           mini_batch = mini_batch_iter.next()
+
+          # Reset the minimum (in-sample) loss for each epoch.
+          epoch_min_loss = 999
+ 
+          num_batch = 0
+          num_epoch += 1
 
         num_batch += 1
         
@@ -170,15 +216,15 @@ class DH_Worker(QtCore.QThread):
         
         # Forward and backward passes
         grads = tape.gradient(loss, self.model.trainable_weights)
-        optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
 
         # Compute Out-of-Sample Loss
         oos_loss =  Entropy(oos_wealth, certainty_equiv, self.loss_param)
-                    
+
         if self.Figure_IsUpdated:
           if oos_loss.numpy().squeeze() < min_loss:
               min_loss = oos_loss.numpy().squeeze()
-              print("The best price is {:0.4} from epoch {} batch {}.".format(min_loss,int(num_epoch),int(num_batch)))
+              print("The best price is {:0.5} from epoch {} batch {}.".format(min_loss,int(num_epoch),int(num_batch)))
 
           self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), \
                                                           num_epoch, num_batch, min_loss)
@@ -312,7 +358,8 @@ class MainWindow(QtWidgets.QMainWindow):
       # Run the deep hedging algo in a separate thread.
       self.Thread_RunDH.run_deep_hedge_algo(training_dataset = self.training_dataset, epochs = self.epochs, \
                               Ktrain = self.Ktrain, batch_size = self.batch_size, model = self.model, \
-                              submodel = self.submodel, strategy_type = self.strategy_type, loss_param = self.loss_param, learning_rate = self.lr, xtest = self.xtest, \
+                              submodel = self.submodel, strategy_type = self.strategy_type, loss_param = self.loss_param, learning_rate = self.lr, \
+                              xtest = self.xtest, xtrain = self.xtrain, \
                               initial_price_BS = self.price_BS[0][0], width = self.width, I_range = self.I_range, x_range = self.x_range)
 
   # Define action when the Pause button is clicked.
