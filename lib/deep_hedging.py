@@ -2,7 +2,6 @@ from tensorflow.keras.layers import Input, Dense, Concatenate, Subtract, \
                 Lambda, Add, Dot, BatchNormalization, Activation, LeakyReLU
 from tensorflow.keras.models import Model
 from tensorflow.keras.initializers import he_normal, Zeros, he_uniform, TruncatedNormal
-from tensorflow.keras.activations import tanh, relu, linear
 import tensorflow.keras.backend as K
 import tensorflow as tf
 import numpy as np

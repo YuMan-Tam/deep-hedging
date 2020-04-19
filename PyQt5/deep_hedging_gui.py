@@ -64,7 +64,7 @@ use_batch_norm = False
 kernel_initializer = "he_uniform"
 
 activation_dense = "leaky_relu"
-activation_output = "leaky_relu"
+activation_output = "sigmoid"
 final_period_cost = False
 
 # Reducing learning rate
@@ -128,8 +128,8 @@ class DH_Worker(QtCore.QThread):
 
   def Reduce_Learning_Rate(self, num_epoch, loss):
     # Extract in-sample loss from the previous epoch. Comparison starts in epoch 2 and the index for epoch 1 is 0 -> -2
-    last_loss = self.loss_record[num_epoch-2,1]
-    if last_loss - loss < reduce_lr_param["min_delta"]:
+    min_loss = self.loss_record[:,1].min()
+    if min_loss - loss < reduce_lr_param["min_delta"]:
         self.reduce_lr_counter += 1
 
     if self.reduce_lr_counter > reduce_lr_param["patience"]:
@@ -139,8 +139,8 @@ class DH_Worker(QtCore.QThread):
         self.reduce_lr_counter = 0
 
   def Early_Stopping(self, num_epoch, loss):
-    last_loss = self.loss_record[num_epoch-2,1]
-    if last_loss - loss < early_stopping_param["min_delta"]:
+    min_loss = self.loss_record[:,1].min()
+    if min_loss - loss < early_stopping_param["min_delta"]:
         self.early_stopping_counter +=1
       
   def run(self):
@@ -172,6 +172,9 @@ class DH_Worker(QtCore.QThread):
           # Reduce learning rates and Early Stopping are based on in-sample losses calculated once per epoch.
           in_sample_wealth = model_func(self.xtrain)
           in_sample_loss = Entropy(in_sample_wealth,certainty_equiv,self.loss_param)
+
+          if num_epoch >= 1:
+            print("The deep-hedging price is {:0.4f} after {} epoch.".format(oos_loss, num_epoch))
  
           if num_epoch == 1:
             self.loss_record = np.array([num_epoch, in_sample_loss],ndmin=2)
@@ -179,7 +182,7 @@ class DH_Worker(QtCore.QThread):
             self.Reduce_Learning_Rate(num_epoch, in_sample_loss)
             self.loss_record = np.vstack([self.loss_record, np.array([num_epoch,in_sample_loss])])
             
-            self.Early_Stopping(num_epoch,in_sample_loss)
+            # self.Early_Stopping(num_epoch,in_sample_loss)
             if self.early_stopping_counter > early_stopping_param["patience"]:
                 print(early_stopping_param["patience"])
                 print("The difference in losses are less than {} in {} consecutive epochs. We achieved convergence.".format(early_stopping_param["min_delta"], self.early_stopping_counter))
@@ -224,7 +227,7 @@ class DH_Worker(QtCore.QThread):
         if self.Figure_IsUpdated:
           if oos_loss.numpy().squeeze() < min_loss:
               min_loss = oos_loss.numpy().squeeze()
-              print("The best price is {:0.5} from epoch {} batch {}.".format(min_loss,int(num_epoch),int(num_batch)))
+              # print("The best price is {:0.4f} from epoch {} batch {}.".format(min_loss,int(num_epoch),int(num_batch)))
 
           self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), \
                                                           num_epoch, num_batch, min_loss)
@@ -334,7 +337,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
       # Compute Black-Scholes prices for benchmarking.
       self.price_BS, self.delta_BS, self.PnL_BS = self.get_Black_Scholes_Prices()
-      
+
+      # Compute the loss value for Black-Scholes PnL
+      self.loss_BS = Entropy(self.PnL_BS,tf.Variable(0.0),self.loss_param).numpy()
+
       # Define model and sub-models
       self.model = self.Define_DH_model()
       self.submodel = self.Define_DH_Delta_Strategy_Model()
@@ -378,7 +384,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                                 dt = self.dt, strategy_type=self.strategy_type, epsilon = self.epsilon, \
                                                 use_batch_norm = use_batch_norm, kernel_initializer = kernel_initializer, \
                                                 activation_dense = activation_dense, activation_output = activation_output, \
-                                                final_period_cost = final_period_cost)
+                                                final_period_cost = final_period_cost, delta_constraint = None)
     
     return model
   
@@ -470,7 +476,15 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_loss.setRange(xRange = (0, self.total_train_step))
     
     self.DH_loss_plot = pg.ScatterPlotItem(brush='b', size=3)
+
     fig_loss.addItem(self.DH_loss_plot)
+    fig_loss_BS_loss_text = \
+        pg.TextItem(html="<div align='center'><span style='color: #FFF;'>Black-Scholes Loss (Benchmark)</span><br><span style='color: #FF0; font-size: 16pt;'>{:0.4f}</span></div>".format(self.loss_BS), \
+        anchor=(0,0), angle=0, border='w', fill=(0, 0, 255, 100))
+    fig_loss_BS_loss_text.setPos(self.total_train_step*0.6,self.loss_BS + 1.0)
+
+    fig_loss.addLine(y=self.loss_BS, pen=pg.mkPen(color="r", width=1.5))
+    fig_loss.addItem(fig_loss_BS_loss_text)
     
     # Label the graph.
     self.fig_loss_title = "<font size='5'> Loss Function (Option Price) </font>"
