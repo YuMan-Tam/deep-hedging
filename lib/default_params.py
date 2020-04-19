@@ -1,7 +1,7 @@
 # Define the initial parameters for the deep hedging demo
 def Deep_Hedging_Params():
 	params = [
-			{'name': 'European Call', 'type': 'group', 'children': [
+			{'name': 'European Call Option', 'type': 'group', 'children': [
 					{'name': 'S0', 'type': 'int', 'value': 100.0},
 					{'name': 'Strike', 'type': 'float', 'value': 100.0},
 					{'name': 'Implied Volatility', 'type': 'float', 'value': 0.2},

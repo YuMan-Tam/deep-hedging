@@ -306,15 +306,15 @@ class MainWindow(QtWidgets.QMainWindow):
       # Set parameters
       self.Ktrain = self.params.param("Monte-Carlo Simulation", 'Sample Size', "Training").value()
       self.Ktest_ratio = self.params.param("Monte-Carlo Simulation", 'Sample Size', "Testing (as fraction of Training)").value()
-      self.N = self.params.param("European Call", "Maturity (in days)").value()
-      self.S0 = self.params.param("European Call", "S0").value()
-      self.strike = self.params.param("European Call", "Strike").value()
-      self.sigma = self.params.param("European Call", "Implied Volatility").value()
-      self.risk_free = self.params.param("European Call", "Risk-Free Rate").value()
-      self.dividend = self.params.param("European Call", "Dividend Yield").value()
+      self.N = self.params.param("European Call Option", "Maturity (in days)").value()
+      self.S0 = self.params.param("European Call Option", "S0").value()
+      self.strike = self.params.param("European Call Option", "Strike").value()
+      self.sigma = self.params.param("European Call Option", "Implied Volatility").value()
+      self.risk_free = self.params.param("European Call Option", "Risk-Free Rate").value()
+      self.dividend = self.params.param("European Call Option", "Dividend Yield").value()
       
       self.loss_param = self.params.param("Deep Hedging Strategy", 'Loss Function (Exponential)', "Risk Aversion").value()
-      self.epsilon = self.params.param("European Call", "Proportional Transaction Cost", "Cost").value()
+      self.epsilon = self.params.param("European Call Option", "Proportional Transaction Cost", "Cost").value()
       self.d = self.params.param("Deep Hedging Strategy", "Network Structure", "Number of Hidden Layers").value()
       self.m = self.params.param("Deep Hedging Strategy", "Network Structure", "Number of Neurons").value()
       self.strategy_type = self.params.param("Deep Hedging Strategy", "Network Structure", "Network Type").value()
@@ -423,12 +423,17 @@ class MainWindow(QtWidgets.QMainWindow):
     
     fig_PnL.setTitle("<font size='5'>Profit and Loss (PnL) Histogram</font>")
     fig_PnL.setLabels(left="<font size='4'>Frequency</font>", bottom="<font size='4'>Profit and Loss (PnL) </font>")
-    fig_PnL.addLegend(offset=(5,5))
+
+    fig_PnL_text = \
+        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark)</span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>", \
+        anchor=(0,0), angle=0, border='w', fill=(225, 225, 200))
+    fig_PnL_text.setPos(self.bin_edges.min()*1.3,self.BS_bins.max()*1.05)
 
     # Fix the problem that Y-axes keep moving when transactioni cost is greater than zero.
     fig_PnL.setYRange(0,self.BS_bins.max()*1.1)
     
     fig_PnL.addItem(self.BS_hist)
+    fig_PnL.addItem(fig_PnL_text)
 
     return fig_PnL
           
@@ -461,10 +466,17 @@ class MainWindow(QtWidgets.QMainWindow):
     self.BS_delta_plot = pg.PlotCurveItem(pen = pg.mkPen(color="r", width=2.5), name = "Black-Scholes")
     self.BS_delta_plot.setData(self.S_range, self.model_delta)
     
-    fig_delta.setTitle("<font size='5'>Delta Plot</font>")
+    fig_delta.setTitle("<font size='5'> Hedging Strategy: Delta (at t = 15 days)</font>")
     fig_delta.setLabels(left="<font size='4'>Delta</font>", bottom="<font size='4'>Stock Price</font>")
 
+    fig_delta_text = \
+        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Delta (Benchmark)</span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging Delta </span></div>", \
+        anchor=(0,0), angle=0, border='w', fill=(255, 255, 200))
+    fig_delta_text.setPos(self.S_range.min(),self.model_delta.max())
+
+
     fig_delta.addItem(self.BS_delta_plot)
+    fig_delta.addItem(fig_delta_text)
                             
     return fig_delta
   
@@ -480,13 +492,8 @@ class MainWindow(QtWidgets.QMainWindow):
     self.DH_loss_plot = pg.ScatterPlotItem(brush='b', size=3)
 
     fig_loss.addItem(self.DH_loss_plot)
-    fig_loss_BS_loss_text = \
-        pg.TextItem(html="<div align='center'><span style='color: #FFF;'>Black-Scholes Loss (Benchmark)</span><br><span style='color: #FF0; font-size: 16pt;'>{:0.4f}</span></div>".format(self.loss_BS), \
-        anchor=(0,0), angle=0, border='w', fill=(0, 0, 255, 100))
-    fig_loss_BS_loss_text.setPos(self.total_train_step*0.6,self.loss_BS + 1.0)
 
     fig_loss.addLine(y=self.loss_BS, pen=pg.mkPen(color="r", width=1.5))
-    fig_loss.addItem(fig_loss_BS_loss_text)
     
     # Label the graph.
     self.fig_loss_title = "<font size='5'> Loss Function (Option Price) </font>"
@@ -512,6 +519,19 @@ class MainWindow(QtWidgets.QMainWindow):
       # Update the Loss plot
       self.step = 1
       self.DH_loss_plot.addPoints(np.array((self.step,)), np.array((loss,)))
+
+      fig_loss_BS_loss_text = \
+        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Loss (Benchmark)</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.loss_BS), \
+        anchor=(1,1), angle=0, border='w', fill=(255,255,200))
+      fig_loss_BS_loss_text.setPos(self.total_train_step*0.6,self.loss_BS*1.2)
+
+      self.fig_loss_DH_loss_text = \
+        pg.TextItem(html="<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(loss), \
+        anchor=(0,0), angle=0, border='w', fill=(255,255,200))
+      self.fig_loss_DH_loss_text.setPos(self.step,loss)
+
+      self.fig_loss.addItem(fig_loss_BS_loss_text)
+      self.fig_loss.addItem(self.fig_loss_DH_loss_text)
       
     else:
       # Update PnL Histograms
@@ -522,16 +542,14 @@ class MainWindow(QtWidgets.QMainWindow):
       
       # Update the Loss plot
       self.step += 1
+
+      self.fig_loss_DH_loss_text.setHtml("<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(loss))
+      self.fig_loss_DH_loss_text.setPos(self.step,loss*0.9)
       
       # Downsampling.
       if self.step % 50 == 1:
         self.DH_loss_plot.addPoints(np.array((self.step,)), np.array((loss,)))
-        
-    self.fig_loss_status_text = "<font size='5'>" + "Epoch = " + "{:.0f}".format(num_epoch) + "&nbsp;&nbsp;"\
-                                  " Batch = " + "{:.0f}".format(num_batch) + "&nbsp;&nbsp;"\
-                                  " Loss = " + "{:.3f}".format(loss) + "</font>"
-    self.fig_loss.setTitle(self.fig_loss_status_text)
-      
+              
     self.Thread_RunDH.Figure_IsUpdated = True
           
   def simulate_stock_prices(self):
