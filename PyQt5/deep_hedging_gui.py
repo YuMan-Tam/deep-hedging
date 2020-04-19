@@ -424,7 +424,9 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_PnL.setTitle("<font size='5'>Profit and Loss (PnL) Histogram</font>")
     fig_PnL.setLabels(left="<font size='4'>Frequency</font>", bottom="<font size='4'>Profit and Loss (PnL) </font>")
     fig_PnL.addLegend(offset=(5,5))
-    fig_PnL.enableAutoRange()
+
+    # Fix the problem that Y-axes keep moving when transactioni cost is greater than zero.
+    fig_PnL.setYRange(0,self.BS_bins.max()*1.1)
     
     fig_PnL.addItem(self.BS_hist)
 
