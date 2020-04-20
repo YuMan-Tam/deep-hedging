@@ -140,7 +140,6 @@ class DH_Worker(QtCore.QThread):
         self.early_stopping_counter +=1
       
   def run(self):
-
     # Initialize pause and stop buttons.
     self._exit = False
     self._pause = False
