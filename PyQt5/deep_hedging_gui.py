@@ -103,11 +103,9 @@ class DH_Worker(QtCore.QThread):
     self.xtrain = xtrain
     self.I_range = I_range
     self.x_range = x_range
-    self.learning_rate = learning_rate
     self.strategy_type = strategy_type
+    self.learning_rate = learning_rate
 
-    self.Figure_IsUpdated = True
-    
     self.start()
       
   def pause(self):
@@ -144,6 +142,8 @@ class DH_Worker(QtCore.QThread):
         self.early_stopping_counter +=1
       
   def run(self):
+    self.Figure_IsUpdated = True
+
     self.reduce_lr_counter = 0
     self.early_stopping_counter = 0
 
@@ -510,7 +510,6 @@ class MainWindow(QtWidgets.QMainWindow):
             ("<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br>" + \
             "<span style='color: rgb(34,139,34);'> Epoch: {} Batch: {}</span><br>" + \
             "<span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>").format(int(num_epoch), int(num_batch), loss)
-
     if num_epoch == 1 and num_batch == 1:
       # Update PnL Histogram
       self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b', \
@@ -536,7 +535,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
       self.fig_loss.addItem(fig_loss_BS_loss_text)
       self.fig_loss.addItem(self.fig_loss_DH_loss_text)
-      
     else:
       # Update PnL Histograms
       self.DH_hist.setOpts(height=DH_bins)
