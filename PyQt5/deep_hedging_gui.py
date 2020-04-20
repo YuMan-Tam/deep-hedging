@@ -39,6 +39,7 @@ from default_params import Deep_Hedging_Params
 
 # Tensorflow settings
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+tf.autograph.set_verbosity(0)
 
 # PyQtGraph Settings
 pg.setConfigOptions(antialias=False)
@@ -144,6 +145,7 @@ class DH_Worker(QtCore.QThread):
     self._exit = False
     self._pause = False
 
+    # Variables to control skipped frames. If the DH algo output much faster than the graphic output, the plots can be jammed.
     self.Figure_IsUpdated = True
 
     self.reduce_lr_counter = 0
@@ -537,6 +539,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
       self.fig_loss.addItem(fig_loss_BS_loss_text)
       self.fig_loss.addItem(self.fig_loss_DH_loss_text)
+
+      self.last_step_plotted = 0
     else:
       # Update PnL Histograms
       self.DH_hist.setOpts(height=DH_bins)
@@ -559,9 +563,11 @@ class MainWindow(QtWidgets.QMainWindow):
       self.fig_loss_DH_loss_text.setPos(self.step,loss*0.9)
       
       # Downsampling.
-      if self.step % 50 == 1:
+      num_frame_to_skip = 50
+      if self.step - self.last_step_plotted > num_frame_to_skip:
         self.DH_loss_plot.addPoints(np.array((self.step,)), np.array((loss,)))
-              
+        self.last_step_plotted = self.step
+
     self.Thread_RunDH.Figure_IsUpdated = True
           
   def simulate_stock_prices(self):
