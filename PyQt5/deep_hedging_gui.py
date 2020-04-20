@@ -160,7 +160,6 @@ class DH_Worker(QtCore.QThread):
     self.optimizer = Adam(learning_rate=self.learning_rate)
     
     num_epoch = 0
-    min_loss = 999
     while num_epoch <= self.epochs:
       # Exit event loop if the exit flag is set to True.
       if self._exit:
@@ -229,12 +228,8 @@ class DH_Worker(QtCore.QThread):
         oos_loss =  Entropy(oos_wealth, certainty_equiv, self.loss_param)
 
         if self.Figure_IsUpdated:
-          if oos_loss.numpy().squeeze() < min_loss:
-              min_loss = oos_loss.numpy().squeeze()
-              # print("The best price is {:0.4f} from epoch {} batch {}.".format(min_loss,int(num_epoch),int(num_batch)))
-
           self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), \
-                                                          num_epoch, num_batch, min_loss)
+                                                          num_epoch, num_batch, 0.0)
           
           # This is needed to prevent the output signals from emitting faster than the system can plot a graph.
           # The performance is much better than emitting at fixed time intervals.
@@ -490,9 +485,14 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_loss = pg.PlotWidget()
     
     # Set appropriate xRange.
+    self.loss_plot_flag = "step" # "epoch" or "step"
     self.num_batch_per_epoch = np.floor(self.Ktrain/self.batch_size)
     self.total_train_step = self.num_batch_per_epoch*self.epochs
-    fig_loss.setRange(xRange = (0, self.total_train_step))
+
+    if self.loss_plot_flag == "epoch":
+        fig_loss.setRange(xRange = (0, self.epochs))
+    elif self.loss_plot_flag == "step":
+        fig_loss.setRange(xRange = (0, self.total_train_step))
     
     self.DH_loss_plot = pg.ScatterPlotItem(brush='b', size=3)
 
