@@ -505,6 +505,12 @@ class MainWindow(QtWidgets.QMainWindow):
   # Update Plots - Black-Scholes vs Deep Hedging.
   def Update_Plots_Widget(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
                                                           loss = None, num_epoch = None, num_batch = None, min_loss = None):
+
+    fig_loss_DH_loss_text_str = \
+            ("<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br>" + \
+            "<span style='color: rgb(34,139,34);'> Epoch: {} Batch: {}</span><br>" + \
+            "<span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>").format(int(num_epoch), int(num_batch), loss)
+
     if num_epoch == 1 and num_batch == 1:
       # Update PnL Histogram
       self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b', \
@@ -525,9 +531,7 @@ class MainWindow(QtWidgets.QMainWindow):
         anchor=(1,1), angle=0, border='w', fill=(255,255,200))
       fig_loss_BS_loss_text.setPos(self.total_train_step*0.6,self.loss_BS*1.2)
 
-      self.fig_loss_DH_loss_text = \
-        pg.TextItem(html="<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(loss), \
-        anchor=(0,0), angle=0, border='w', fill=(255,255,200))
+      self.fig_loss_DH_loss_text = pg.TextItem(html= fig_loss_DH_loss_text_str, anchor=(0,0), angle=0, border='w', fill=(255,255,200))
       self.fig_loss_DH_loss_text.setPos(self.step,loss)
 
       self.fig_loss.addItem(fig_loss_BS_loss_text)
@@ -543,7 +547,15 @@ class MainWindow(QtWidgets.QMainWindow):
       # Update the Loss plot
       self.step += 1
 
-      self.fig_loss_DH_loss_text.setHtml("<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(loss))
+      # (Cosmetic) Switch the anchor of the Deep-Hedge loss text from (0,0) to (1,0) when needed to prevent it from going out of bound.
+      if self.step > self.total_train_step*0.5:
+        self.fig_loss.removeItem(self.fig_loss_DH_loss_text)
+
+        self.fig_loss_DH_loss_text = pg.TextItem(html= fig_loss_DH_loss_text_str, anchor=(1,0), angle=0, border='w', fill=(255,255,200))
+        self.fig_loss_DH_loss_text.setPos(self.step,loss)
+        self.fig_loss.addItem(self.fig_loss_DH_loss_text)
+
+      self.fig_loss_DH_loss_text.setHtml(fig_loss_DH_loss_text_str)
       self.fig_loss_DH_loss_text.setPos(self.step,loss*0.9)
       
       # Downsampling.
