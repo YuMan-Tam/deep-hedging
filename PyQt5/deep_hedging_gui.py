@@ -81,8 +81,6 @@ class DH_Worker(QtCore.QThread):
   DH_outputs = QtCore.pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.float32, float, float, np.float32)
   def __init__(self):
     QtCore.QThread.__init__(self)
-    self._exit = False
-    self._pause = False
       
   def __del__(self):
     self.wait()
@@ -142,6 +140,11 @@ class DH_Worker(QtCore.QThread):
         self.early_stopping_counter +=1
       
   def run(self):
+
+    # Initialize pause and stop buttons.
+    self._exit = False
+    self._pause = False
+
     self.Figure_IsUpdated = True
 
     self.reduce_lr_counter = 0
