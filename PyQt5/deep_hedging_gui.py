@@ -448,7 +448,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
     self.min_S = self.S_test[0][:,self.days_from_today].min()
     self.max_S = self.S_test[0][:,self.days_from_today].max()
-    self.S_range = np.linspace(self.min_S,self.max_S,101)
+    self.S_range = np.linspace(self.min_S,self.max_S,51)
 
     # Attention: Need to transform it to be consistent with the information set.
     if information_set == "S":
@@ -522,7 +522,7 @@ class MainWindow(QtWidgets.QMainWindow):
       self.fig_PnL.addItem(self.DH_hist)
 
       # Update the Delta plot
-      self.DH_delta_plot = pg.ScatterPlotItem(brush='b', size=5, name = "Deep Heding")
+      self.DH_delta_plot = pg.PlotDataItem(symbolBrush=(0,0,255), symbolPen='b', symbol='+', symbolSize=10, name = "Deep Hedging")
       self.DH_delta_plot.setData(self.S_range, DH_delta)
       self.fig_delta.addItem(self.DH_delta_plot)
       
