@@ -429,7 +429,7 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_PnL_text = \
         pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark)</span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>", \
         anchor=(0,0), angle=0, border='w', fill=(225, 225, 200))
-    fig_PnL_text.setPos(self.bin_edges.min()*1.3,self.BS_bins.max()*1.05)
+    fig_PnL_text.setPos(self.bin_edges.min()*1.35,self.BS_bins.max()*1.05)
 
     # Fix the problem that Y-axes keep moving when transactioni cost is greater than zero.
     fig_PnL.setYRange(0,self.BS_bins.max()*1.1)
