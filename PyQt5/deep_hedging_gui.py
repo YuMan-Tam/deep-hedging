@@ -490,7 +490,8 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_loss = pg.PlotWidget()
     
     # Set appropriate xRange.
-    self.total_train_step = np.floor(self.Ktrain/self.batch_size)*self.epochs
+    self.num_batch_per_epoch = np.floor(self.Ktrain/self.batch_size)
+    self.total_train_step = self.num_batch_per_epoch*self.epochs
     fig_loss.setRange(xRange = (0, self.total_train_step))
     
     self.DH_loss_plot = pg.ScatterPlotItem(brush='b', size=3)
@@ -548,8 +549,11 @@ class MainWindow(QtWidgets.QMainWindow):
       # Update the Delta plot
       self.DH_delta_plot.setData(self.S_range,DH_delta)
       
-      # Update the Loss plot
-      self.step += 1
+      # Update the Loss plot.
+
+      # If there is no skipped frames, then self.step += 1 would also work. This needs to be explicitly calculated because of
+      # the possiblity of skipped frames.
+      self.step = self.num_batch_per_epoch*(num_epoch-1) + num_batch
 
       # (Cosmetic) Switch the anchor of the Deep-Hedge loss text from (0,0) to (1,0) when needed to prevent it from going out of bound.
       if self.step > self.total_train_step*0.5:
