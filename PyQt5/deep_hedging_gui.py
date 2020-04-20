@@ -135,7 +135,7 @@ class DH_Worker(QtCore.QThread):
     if self.reduce_lr_counter > reduce_lr_param["patience"]:
         self.learning_rate = self.learning_rate * reduce_lr_param["factor"]
         self.optimizer.learning_rate = self.learning_rate
-        print("The learning rate is reduced to {}".format(self.learning_rate))
+        print("The learning rate is reduced to {}.".format(self.learning_rate))
         self.reduce_lr_counter = 0
 
   def Early_Stopping(self, num_epoch, loss):
