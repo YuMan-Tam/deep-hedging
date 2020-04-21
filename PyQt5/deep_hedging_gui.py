@@ -243,6 +243,10 @@ class DH_Worker(QtCore.QThread):
           # This is needed to prevent the output signals from emitting faster than the system can plot a graph.
           # The performance is much better than emitting at fixed time intervals.
           self.Figure_IsUpdated = False
+
+        # Mandatory pause for the first iteration to explain demo.
+        if num_epoch == 1 and num_batch == 1:
+          self.pause()
       else:
           time.sleep(1)
 
@@ -491,10 +495,7 @@ class MainWindow(QtWidgets.QMainWindow):
   # Draw loss plot (PlotWidget) - Black-Scholes vs Deep Hedging.
   def Loss_Plot_Widget(self):
     fig_loss = pg.PlotWidget()
-    
-    # Set appropriate xRange.
-    fig_loss.setRange(xRange = (0, self.epochs))
-    
+        
     self.DH_loss_plot = pg.PlotDataItem(pen = pg.mkPen(color="b", width=6), \
                                             symbolBrush=(0,0,255), symbolPen='y', symbol='+', symbolSize=8)
     fig_loss.addItem(self.DH_loss_plot)
@@ -502,12 +503,15 @@ class MainWindow(QtWidgets.QMainWindow):
     # Add a line for the Black-Scholes price.
     fig_loss.addLine(y=self.loss_BS, pen=pg.mkPen(color="r", width=1.5))
 
-    BS_loss_html = "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Loss (Benchmark)</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.loss_BS)
-    self.BS_loss_textItem = pg.TextItem(html=BS_loss_html, anchor=(1,1), angle=0, border='w', fill=(255,255,200))
+    self.BS_loss_html = "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Loss (Benchmark)</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.loss_BS)
+    self.BS_loss_textItem = pg.TextItem(html=self.BS_loss_html, anchor=(1,1), angle=0, border='w', fill=(255,255,200))
     
     # Label the graph.
     fig_loss.setTitle("<font size='5'> Loss Function (Option Price) </font>")
     fig_loss.setLabels(left="<font size='4'>Loss Value</font>", bottom="<font size='4'>Loss Function (Option Price) - Number of Epochs</font>")
+
+    # Set appropriate xRange and yRange.
+    fig_loss.setRange(xRange = (0, self.epochs))
 
     return fig_loss
   
@@ -543,6 +547,12 @@ class MainWindow(QtWidgets.QMainWindow):
       self.DH_loss_textItem = pg.TextItem(html= DH_loss_text_str, anchor=(0,0), angle=0, border='w', fill=(255,255,200))
       self.DH_loss_textItem.setPos(num_epoch-1,loss)
       self.fig_loss.addItem(self.DH_loss_textItem)
+
+      self.fig_loss.enableAutoRange()
+
+      # Mandatory pause to explain the demo. Remember to modify the algo thread as well if one wants to remove the feature.
+      # This part takes care the pause button.
+      self.Pause()
     else:
       self.DH_loss_textItem.setHtml(DH_loss_text_str)
       if flag_last_batch_in_epoch:
@@ -557,9 +567,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.DH_loss_plot.setData(self.oos_loss_record)
 
     # Move the Black-Scholes textbox to the left to avoid collision of the deep-hedging textbox.
-    if num_epoch > self.epochs*0.6:
+    if num_epoch > self.epochs*0.5:
+        if self.epsilon == 0:
+            anchor = (0,0)
+        elif self.epsilon > 0 :
+            anchor = (0,1)
+
+        self.fig_loss.removeItem(self.BS_loss_textItem)
+        self.BS_loss_textItem = pg.TextItem(html=self.BS_loss_html, anchor=anchor, angle=0, border='w', fill=(255,255,200))
         self.BS_loss_textItem.setPos(0,self.loss_BS + (yMax_View - self.loss_BS)*0.005)
-    
+        self.fig_loss.addItem(self.BS_loss_textItem)
+
 
   def Update_PnL_Histogram(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
                                                           loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
