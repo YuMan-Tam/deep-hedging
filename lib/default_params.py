@@ -28,7 +28,7 @@ def Deep_Hedging_Params():
             {'name': 'Number of Neurons', 'type': 'int', 'value': 15},
 					]},
 					{'name': 'Learning Parameters', 'type': 'group', 'children': [
-            {'name': 'Learning Rate', 'type': 'float', 'value': 1e-2},
+            {'name': 'Learning Rate', 'type': 'float', 'value': 5e-3},
             {'name': 'Mini-Batch Size', 'type': 'int', 'value': 256},
             {'name': 'Number of Epochs', 'type': 'int', 'value': 50},
 					]},
