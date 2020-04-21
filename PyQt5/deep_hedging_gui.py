@@ -79,7 +79,7 @@ num_bins = 30
 
 # Need a separate threads for deep hedging algo and plot the graphs.
 class DH_Worker(QtCore.QThread):
-  DH_outputs = QtCore.pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.float32, float, float, np.float32)
+  DH_outputs = QtCore.pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.float32, float, float, bool)
   def __init__(self):
     QtCore.QThread.__init__(self)
       
@@ -178,7 +178,19 @@ class DH_Worker(QtCore.QThread):
 
           if num_epoch >= 1:
             print("The deep-hedging price is {:0.4f} after {} epoch.".format(oos_loss, num_epoch))
- 
+
+            # Programming hack. The deep-hedging algo computes faster than the computer can plot, so there could be
+            # missing frames, i.e. there is no guarantee that every batch is plotted. Here, I force a signal to be
+            # emitted at the end of an epoch.
+            time.sleep(1)
+
+            self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), \
+                                                          num_epoch, num_batch, True)
+
+            # This is needed to prevent the output signals from emitting faster than the system can plot a graph.
+            # The performance is much better than emitting at fixed time intervals.
+            self.Figure_IsUpdated = False
+
           if num_epoch == 1:
             self.loss_record = np.array([num_epoch, in_sample_loss],ndmin=2)
           elif num_epoch > 1:
@@ -194,9 +206,6 @@ class DH_Worker(QtCore.QThread):
           mini_batch_iter = self.training_dataset.shuffle(self.Ktrain).batch(self.batch_size).__iter__()
           mini_batch = mini_batch_iter.next()
 
-          # Reset the minimum (in-sample) loss for each epoch.
-          epoch_min_loss = 999
- 
           num_batch = 0
           num_epoch += 1
 
@@ -229,7 +238,7 @@ class DH_Worker(QtCore.QThread):
 
         if self.Figure_IsUpdated:
           self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), \
-                                                          num_epoch, num_batch, 0.0)
+                                                          num_epoch, num_batch, False)
           
           # This is needed to prevent the output signals from emitting faster than the system can plot a graph.
           # The performance is much better than emitting at fixed time intervals.
@@ -248,7 +257,7 @@ class MainWindow(QtWidgets.QMainWindow):
     # The order of code is important here: Make sure the emitted signals are connected
     # before actually running the Worker.
     self.Thread_RunDH.DH_outputs["PyQt_PyObject", "PyQt_PyObject", "PyQt_PyObject", \
-            "PyQt_PyObject", "double", "double", "PyQt_PyObject"].connect(self.Update_Plots_Widget)
+            "PyQt_PyObject", "double", "double", "bool"].connect(self.Update_Plots_Widget)
             
     # Define a top-level widget to hold everything
     self.w = QtGui.QWidget()
@@ -473,7 +482,6 @@ class MainWindow(QtWidgets.QMainWindow):
         anchor=(0,0), angle=0, border='w', fill=(255, 255, 200))
     fig_delta_text.setPos(self.S_range.min(),self.model_delta.max())
 
-
     fig_delta.addItem(self.BS_delta_plot)
     fig_delta.addItem(fig_delta_text)
                             
@@ -485,94 +493,95 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_loss = pg.PlotWidget()
     
     # Set appropriate xRange.
-    self.loss_plot_flag = "step" # "epoch" or "step"
-    self.num_batch_per_epoch = np.floor(self.Ktrain/self.batch_size)
-    self.total_train_step = self.num_batch_per_epoch*self.epochs
-
-    if self.loss_plot_flag == "epoch":
-        fig_loss.setRange(xRange = (0, self.epochs))
-    elif self.loss_plot_flag == "step":
-        fig_loss.setRange(xRange = (0, self.total_train_step))
+    fig_loss.setRange(xRange = (0, self.epochs))
     
-    self.DH_loss_plot = pg.ScatterPlotItem(brush='b', size=3)
-
+    self.DH_loss_plot = pg.PlotDataItem(pen = pg.mkPen(color="b", width=6), \
+                                            symbolBrush=(0,0,255), symbolPen='y', symbol='+', symbolSize=8)
     fig_loss.addItem(self.DH_loss_plot)
 
+    # Add a line for the Black-Scholes price.
     fig_loss.addLine(y=self.loss_BS, pen=pg.mkPen(color="r", width=1.5))
+
+    BS_loss_html = "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Loss (Benchmark)</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.loss_BS)
+    self.BS_loss_textItem = pg.TextItem(html=BS_loss_html, anchor=(1,1), angle=0, border='w', fill=(255,255,200))
     
     # Label the graph.
-    self.fig_loss_title = "<font size='5'> Loss Function (Option Price) </font>"
-    fig_loss.setTitle(self.fig_loss_title)
-    fig_loss.setLabels(left="<font size='4'>Loss Value</font>", bottom="<font size='4'>Loss Function (Option Price) - Number of Steps</font>")
+    fig_loss.setTitle("<font size='5'> Loss Function (Option Price) </font>")
+    fig_loss.setLabels(left="<font size='4'>Loss Value</font>", bottom="<font size='4'>Loss Function (Option Price) - Number of Epochs</font>")
 
     return fig_loss
   
   # Update Plots - Black-Scholes vs Deep Hedging.
   def Update_Plots_Widget(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
-                                                          loss = None, num_epoch = None, num_batch = None, min_loss = None):
+                                                          loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
 
-    fig_loss_DH_loss_text_str = \
-            ("<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br>" + \
-            "<span style='color: rgb(34,139,34);'> Epoch: {} Batch: {}</span><br>" + \
-            "<span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>").format(int(num_epoch), int(num_batch), loss)
+    self.Update_PnL_Histogram(PnL_DH, DH_delta, DH_bins, loss, num_epoch, num_batch, flag_last_batch_in_epoch)
+    self.Update_Delta_Plot(PnL_DH, DH_delta, DH_bins, loss, num_epoch, num_batch, flag_last_batch_in_epoch)
+    self.Update_Loss_Plot(PnL_DH, DH_delta, DH_bins, loss, num_epoch, num_batch, flag_last_batch_in_epoch)
+      
+    self.Thread_RunDH.Figure_IsUpdated = True
+
+  def Update_Loss_Plot(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
+                                                          loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
+    # Get the latest viewRange
+    yMin_View, yMax_View = self.fig_loss.viewRange()[1]
+
+    # Update text position for Black-Scholes
+    self.BS_loss_textItem.setPos(self.epochs*0.9,self.loss_BS + (yMax_View - self.loss_BS)*0.005)
+
+    # Update text for Deep-Hedging.
+    DH_loss_text_title = "<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br>"
+    DH_loss_text_step = "<span style='color: rgb(34,139,34);'> Epoch: {} Batch: {}</span><br>"
+    DH_loss_text_loss = "<span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>"
+
+    DH_loss_text_str = (DH_loss_text_title + DH_loss_text_step + DH_loss_text_loss).format(int(num_epoch), int(num_batch), loss)
+
+    if num_epoch ==1 and num_batch == 1:
+      self.fig_loss.addItem(self.BS_loss_textItem)
+
+      # Setup the textbox for the deep-hedging loss.
+      self.DH_loss_textItem = pg.TextItem(html= DH_loss_text_str, anchor=(0,0), angle=0, border='w', fill=(255,255,200))
+      self.DH_loss_textItem.setPos(num_epoch-1,loss)
+      self.fig_loss.addItem(self.DH_loss_textItem)
+    else:
+      self.DH_loss_textItem.setHtml(DH_loss_text_str)
+      if flag_last_batch_in_epoch:
+        self.DH_loss_textItem.setPos(num_epoch,loss)
+        if num_epoch == 1:
+          # Establish the data for the out-of-sample loss at the end of the first epoch.
+          self.oos_loss_record = np.array([num_epoch, loss],ndmin=2)
+        else:
+          # Keep adding data at the end of each epoch.
+          self.oos_loss_record = np.vstack([self.oos_loss_record, np.array([num_epoch,loss])])
+        
+        self.DH_loss_plot.setData(self.oos_loss_record)
+
+    # Move the Black-Scholes textbox to the left to avoid collision of the deep-hedging textbox.
+    if num_epoch > self.epochs*0.6:
+        self.BS_loss_textItem.setPos(0,self.loss_BS + (yMax_View - self.loss_BS)*0.005)
+    
+
+  def Update_PnL_Histogram(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
+                                                          loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
     if num_epoch == 1 and num_batch == 1:
       # Update PnL Histogram
       self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b', \
               name = "Blue - Deep Hedging", antialias=False)
       self.fig_PnL.addItem(self.DH_hist)
-
-      # Update the Delta plot
-      self.DH_delta_plot = pg.PlotDataItem(symbolBrush=(0,0,255), symbolPen='b', symbol='+', symbolSize=10, name = "Deep Hedging")
-      self.DH_delta_plot.setData(self.S_range, DH_delta)
-      self.fig_delta.addItem(self.DH_delta_plot)
-      
-      # Update the Loss plot
-      self.step = 1
-      self.DH_loss_plot.addPoints(np.array((self.step,)), np.array((loss,)))
-
-      fig_loss_BS_loss_text = \
-        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Loss (Benchmark)</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.loss_BS), \
-        anchor=(1,1), angle=0, border='w', fill=(255,255,200))
-      fig_loss_BS_loss_text.setPos(self.total_train_step*0.6,self.loss_BS*1.2)
-
-      self.fig_loss_DH_loss_text = pg.TextItem(html= fig_loss_DH_loss_text_str, anchor=(0,0), angle=0, border='w', fill=(255,255,200))
-      self.fig_loss_DH_loss_text.setPos(self.step,loss)
-
-      self.fig_loss.addItem(fig_loss_BS_loss_text)
-      self.fig_loss.addItem(self.fig_loss_DH_loss_text)
-
-      self.last_step_plotted = 0
     else:
       # Update PnL Histograms
       self.DH_hist.setOpts(height=DH_bins)
 
+  def Update_Delta_Plot(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
+                                                          loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
+    if num_epoch == 1 and num_batch == 1:
+      # Update the Delta plot
+      self.DH_delta_plot = pg.PlotDataItem(symbolBrush=(0,0,255), symbolPen='b', symbol='+', symbolSize=10, name = "Deep Hedging")
+      self.DH_delta_plot.setData(self.S_range, DH_delta)
+      self.fig_delta.addItem(self.DH_delta_plot)
+    else:
       # Update the Delta plot
       self.DH_delta_plot.setData(self.S_range,DH_delta)
-      
-      # Update the Loss plot.
-
-      # If there is no skipped frames, then self.step += 1 would also work. This needs to be explicitly calculated because of
-      # the possiblity of skipped frames.
-      self.step = self.num_batch_per_epoch*(num_epoch-1) + num_batch
-
-      # (Cosmetic) Switch the anchor of the Deep-Hedge loss text from (0,0) to (1,0) when needed to prevent it from going out of bound.
-      if self.step > self.total_train_step*0.5:
-        self.fig_loss.removeItem(self.fig_loss_DH_loss_text)
-
-        self.fig_loss_DH_loss_text = pg.TextItem(html= fig_loss_DH_loss_text_str, anchor=(1,0), angle=0, border='w', fill=(255,255,200))
-        self.fig_loss_DH_loss_text.setPos(self.step,loss)
-        self.fig_loss.addItem(self.fig_loss_DH_loss_text)
-
-      self.fig_loss_DH_loss_text.setHtml(fig_loss_DH_loss_text_str)
-      self.fig_loss_DH_loss_text.setPos(self.step,loss*0.9)
-      
-      # Downsampling.
-      num_frame_to_skip = 50
-      if self.step - self.last_step_plotted > num_frame_to_skip:
-        self.DH_loss_plot.addPoints(np.array((self.step,)), np.array((loss,)))
-        self.last_step_plotted = self.step
-
-    self.Thread_RunDH.Figure_IsUpdated = True
           
   def simulate_stock_prices(self):
     self.nobs = int(self.Ktrain*(1+self.Ktest_ratio)) # Total obs = Training + Testing
