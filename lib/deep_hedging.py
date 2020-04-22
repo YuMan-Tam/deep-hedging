@@ -29,10 +29,10 @@ class Strategy_Layer(tf.keras.layers.Layer):
         self.delta_constraint = delta_constraint
         self.kernel_initializer = kernel_initializer
         
-        self.intermediate_dense = [None for _ in range(d-1)]
-        self.intermediate_BN = [None for _ in range(d-1)]
+        self.intermediate_dense = [None for _ in range(d)]
+        self.intermediate_BN = [None for _ in range(d)]
         
-        for i in range(d-1):
+        for i in range(d):
            self.intermediate_dense[i] = Dense(self.m,    
                         kernel_initializer=self.kernel_initializer,
                         bias_initializer=bias_initializer,
@@ -47,34 +47,33 @@ class Strategy_Layer(tf.keras.layers.Layer):
         
     def call(self, input):
         for i in range(self.d):
-            if i != self.d-1:
-                if i == 0:
-                    output = self.intermediate_dense[i](input)
-                else:
-                    output = self.intermediate_dense[i](output)                  
-                
-                if self.use_batch_norm:
- 					# Batch normalization.
-                    output = self.intermediate_BN[i](output, training=True)
-                
-                if self.activation_dense == "leaky_relu":
-                    output = LeakyReLU()(output)
-                else:
-                    output = Activation(self.activation_dense)(output)
+            if i == 0:
+                output = self.intermediate_dense[i](input)
             else:
-                output = self.output_dense(output)
+                output = self.intermediate_dense[i](output)                  
+                
+            if self.use_batch_norm:
+ 			    # Batch normalization.
+                output = self.intermediate_BN[i](output, training=True)
+                
+            if self.activation_dense == "leaky_relu":
+                output = LeakyReLU()(output)
+            else:
+                output = Activation(self.activation_dense)(output)
+         
+        output = self.output_dense(output)
 					 
-                if self.activation_output == "leaky_relu":
-                    output = LeakyReLU()(output)
-                elif self.activation_output == "sigmoid" or self.activation_output == "tanh" or \
-                     self.activation_output == "hard_sigmoid":
-                    # Enforcing hedge constraints
-                    if self.delta_constraint is not None:
-                        output = Activation(self.activation_output)(output)
-                        delta_min, delta_max = self.delta_constraint
-                        output = Lambda(lambda x : (delta_max-delta_min)*x + delta_min)(output)
-                    else:
-                        output = Activation(self.activation_output)(output)
+        if self.activation_output == "leaky_relu":
+            output = LeakyReLU()(output)
+        elif self.activation_output == "sigmoid" or self.activation_output == "tanh" or \
+            self.activation_output == "hard_sigmoid":
+            # Enforcing hedge constraints
+            if self.delta_constraint is not None:
+                output = Activation(self.activation_output)(output)
+                delta_min, delta_max = self.delta_constraint
+                output = Lambda(lambda x : (delta_max-delta_min)*x + delta_min)(output)
+            else:
+                output = Activation(self.activation_output)(output)
         
         return output
     

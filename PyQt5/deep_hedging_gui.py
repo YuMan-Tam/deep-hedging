@@ -392,7 +392,7 @@ class MainWindow(QtWidgets.QMainWindow):
   # Define deep hedging model
   def Define_DH_model(self):
     # Setup and compile the model
-    model = Deep_Hedging_Model(N=self.N, d=self.d+2, m=self.m, risk_free=self.risk_free, \
+    model = Deep_Hedging_Model(N=self.N, d=self.d, m=self.m, risk_free=self.risk_free, \
                                                 dt = self.dt, strategy_type=self.strategy_type, epsilon = self.epsilon, \
                                                 use_batch_norm = use_batch_norm, kernel_initializer = kernel_initializer, \
                                                 activation_dense = activation_dense, activation_output = activation_output, \
