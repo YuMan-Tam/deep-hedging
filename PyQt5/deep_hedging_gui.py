@@ -358,6 +358,24 @@ class MainWindow(QtWidgets.QMainWindow):
       self.submodel = self.Define_DH_Delta_Strategy_Model()
       
       plot_height_split = (self.tree_height+1)/2
+
+      # For the presentation...
+      self.flag_target = False
+      if self.epsilon > 0:
+        try:
+          self.target_color = (0,155,0)
+          self.target_PnL = np.load("../data/target_PnL_" + str(self.epsilon) + ".npy")
+          self.target_loss = Entropy(self.target_PnL, tf.Variable(0.0), self.loss_param).numpy()
+          self.flag_target = True
+        except:
+          print("No saved file.")
+          pass
+      else:
+        try:
+            self.fig_loss.removeItem(self.DH_target_loss_textItem)
+        except:
+            pass
+
       # Add the PnL histogram (PlotWidget) - Black-Scholes vs Deep Hedging.
       self.fig_PnL = self.PnL_Hist_Widget()
       self.layout.addWidget(self.fig_PnL, 0, 3, plot_height_split, 1) 
@@ -379,6 +397,7 @@ class MainWindow(QtWidgets.QMainWindow):
                               submodel = self.submodel, strategy_type = self.strategy_type, loss_param = self.loss_param, learning_rate = self.lr, \
                               xtest = self.xtest, xtrain = self.xtrain, \
                               initial_price_BS = self.price_BS[0][0], width = self.width, I_range = self.I_range, x_range = self.x_range)
+
 
   # Define action when the Pause button is clicked.
   def Pause(self):
@@ -436,15 +455,26 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_PnL.setTitle("<font size='5'>Profit and Loss (PnL) Histogram</font>")
     fig_PnL.setLabels(left="<font size='4'>Frequency</font>", bottom="<font size='4'>Profit and Loss (PnL) </font>")
 
-    fig_PnL_text = \
-        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark)</span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>", \
-        anchor=(0,0), angle=0, border='w', fill=(225, 225, 200))
-    fig_PnL_text.setPos(self.bin_edges.min()*1.35,self.BS_bins.max()*1.05)
-
     # Fix the problem that Y-axes keep moving when transactioni cost is greater than zero.
     fig_PnL.setYRange(0,self.BS_bins.max()*1.1)
     
     fig_PnL.addItem(self.BS_hist)
+
+    try:
+        self.DH_target_bins, _ = np.histogram(self.target_PnL +self.price_BS[0,0], bins = num_bins, range = self.x_range)
+        self.DH_target_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=self.DH_target_bins, width=self.width, brush=self.target_color, \
+                name = "Green - Deep-Hedging PnL (Target)", antialias = False)
+        # fig_PnL.addItem(self.DH_target_hist)
+        flag_target = True
+    except:
+        pass
+
+    fig_PnL_text = \
+        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark) </span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>", \
+            anchor=(0,0), angle=0, border='w', fill=(225, 225, 200))
+
+
+    fig_PnL_text.setPos(self.bin_edges.min()*1.35,self.BS_bins.max()*1.05)
     fig_PnL.addItem(fig_PnL_text)
 
     return fig_PnL
@@ -482,7 +512,7 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_delta.setLabels(left="<font size='4'>Delta</font>", bottom="<font size='4'>Stock Price</font>")
 
     fig_delta_text = \
-        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Delta (Benchmark)</span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging Delta </span></div>", \
+        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Delta (Benchmark) </span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging Delta </span></div>", \
         anchor=(0,0), angle=0, border='w', fill=(255, 255, 200))
     fig_delta_text.setPos(self.S_range.min(),self.model_delta.max())
 
@@ -503,8 +533,14 @@ class MainWindow(QtWidgets.QMainWindow):
     # Add a line for the Black-Scholes price.
     fig_loss.addLine(y=self.loss_BS, pen=pg.mkPen(color="r", width=1.5))
 
-    self.BS_loss_html = "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Loss (Benchmark)</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.loss_BS)
+    self.BS_loss_html = "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Loss (Benchmark) </span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.loss_BS)
     self.BS_loss_textItem = pg.TextItem(html=self.BS_loss_html, anchor=(1,1), angle=0, border='w', fill=(255,255,200))
+
+    if self.flag_target:
+        self.DH_target_loss_html = "<div align='center'><span style='color: rgb" + str(self.target_color) + \
+                    ";'>Deep-Hedging Loss (Target) </span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.target_loss)
+        self.DH_target_loss_textItem = pg.TextItem(html=self.DH_target_loss_html, anchor=(1,1), angle=0, border='w', fill=(255,255,200))
+
     
     # Label the graph.
     fig_loss.setTitle("<font size='5'> Loss Function (Option Price) </font>")
@@ -512,6 +548,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # Set appropriate xRange and yRange.
     fig_loss.setRange(xRange = (0, self.epochs))
+
+    # For the presentation...
+    if self.epsilon > 0:
+        try:
+            fig_loss.addLine(y=self.target_loss, pen=pg.mkPen(color=self.target_color, width=1.5))
+        except:
+            pass
 
     return fig_loss
   
@@ -525,13 +568,22 @@ class MainWindow(QtWidgets.QMainWindow):
       
     self.Thread_RunDH.Figure_IsUpdated = True
 
+    if num_epoch == self.epochs and flag_last_batch_in_epoch is True and self.epsilon > 0.0:
+        np.save("../data/target_PnL_" + str(self.epsilon), PnL_DH)
+
   def Update_Loss_Plot(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
                                                           loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
+    
+    DH_shift = 0.6
+
     # Get the latest viewRange
     yMin_View, yMax_View = self.fig_loss.viewRange()[1]
 
     # Update text position for Black-Scholes
-    self.BS_loss_textItem.setPos(self.epochs*0.9,self.loss_BS + (yMax_View - self.loss_BS)*0.005)
+    self.BS_loss_textItem.setPos(self.epochs*0.8,self.loss_BS + (yMax_View - self.loss_BS)*0.005)
+
+    if self.flag_target:
+        self.DH_target_loss_textItem.setPos(self.epochs*0.6,self.target_loss + (yMax_View - self.target_loss)*0.005)
 
     # Update text for Deep-Hedging.
     DH_loss_text_title = "<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br>"
@@ -543,9 +595,12 @@ class MainWindow(QtWidgets.QMainWindow):
     if num_epoch ==1 and num_batch == 1:
       self.fig_loss.addItem(self.BS_loss_textItem)
 
+      if self.flag_target:
+        self.fig_loss.addItem(self.DH_target_loss_textItem)
+
       # Setup the textbox for the deep-hedging loss.
       self.DH_loss_textItem = pg.TextItem(html= DH_loss_text_str, anchor=(0,0), angle=0, border='w', fill=(255,255,200))
-      self.DH_loss_textItem.setPos(num_epoch-1,loss)
+      self.DH_loss_textItem.setPos((num_epoch-1) + DH_shift,loss)
       self.fig_loss.addItem(self.DH_loss_textItem)
 
       self.fig_loss.enableAutoRange()
@@ -556,7 +611,7 @@ class MainWindow(QtWidgets.QMainWindow):
     else:
       self.DH_loss_textItem.setHtml(DH_loss_text_str)
       if flag_last_batch_in_epoch:
-        self.DH_loss_textItem.setPos(num_epoch,loss)
+        self.DH_loss_textItem.setPos(num_epoch + DH_shift,loss)
         if num_epoch == 1:
           # Establish the data for the out-of-sample loss at the end of the first epoch.
           self.oos_loss_record = np.array([num_epoch, loss],ndmin=2)
