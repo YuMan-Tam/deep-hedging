@@ -460,24 +460,28 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # Fix the problem that Y-axes keep moving when transactioni cost is greater than zero.
     fig_PnL.setYRange(0,self.BS_bins.max()*1.1)
-    fig_PnL.setXRange(self.bin_edges.min(), 2)
+
+    if self.flag_target:
+        fig_PnL.setXRange(self.bin_edges.min(), 2)
+    else:
+        fig_PnL.setXRange(self.bin_edges.min(), 2)
     
     fig_PnL.addItem(self.BS_hist)
 
-    try:
+    if self.flag_target:
         self.DH_target_bins, _ = np.histogram(self.target_PnL +self.price_BS[0,0], bins = num_bins, range = self.x_range)
         self.DH_target_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+2*self.width, height=self.DH_target_bins, width=self.width, brush=self.target_color, \
                 name = "Green - Deep-Hedging PnL (Target)", antialias = False)
         fig_PnL.addItem(self.DH_target_hist)
-        flag_target = True
-    except:
-        pass
-
-    fig_PnL_text = \
-        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark) </span><br>" + \
+        PnL_html = "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark) </span><br>" + \
                             "<span style='color: rgb{}; ;'>Deep-Hedging PnL (Target) </span><br>".format(str(self.target_color)) +  \
-                            "<span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>", 
-            anchor=(0,0), angle=0, border='w', fill=(225, 225, 200))
+                            "<span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>"
+    else:
+        PnL_html =  "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark) </span><br>" + \
+                            "<span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>"
+
+    fig_PnL_text = pg.TextItem(html=PnL_html, anchor=(0,0), angle=0, border='w', fill=(225, 225, 200))
+    
 
 
     fig_PnL_text.setPos(self.bin_edges.min(),self.BS_bins.max()*1.05)
