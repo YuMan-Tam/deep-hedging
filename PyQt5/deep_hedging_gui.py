@@ -593,7 +593,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # Update text for Deep-Hedging.
     DH_loss_text_title = "<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br>"
-    DH_loss_text_step = "<span style='color: rgb(34,139,34);'> Epoch: {} Batch: {}</span><br>"
+    DH_loss_text_step = "<span style='color: rgb(0,0,0);'> Epoch: {} Batch: {}</span><br>"
     DH_loss_text_loss = "<span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>"
 
     DH_loss_text_str = (DH_loss_text_title + DH_loss_text_step + DH_loss_text_loss).format(int(num_epoch), int(num_batch), loss)
