@@ -15,5 +15,5 @@ def Loss(loss_type = None, wealth = None, loss_param = None):
 	if loss_type == "Entropy":
 		return Entropy(wealth=wealth, loss_param=loss_param)
 	elif loss_type == "CVaR":
-		w = tf.Variable(0.0, name = "certainty_equiv")
+		w = tf.Variable(0.0, name = "certainty_equiv", trainable=True)
 		return CVaR(wealth, w, loss_param)
