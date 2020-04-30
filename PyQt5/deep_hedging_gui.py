@@ -560,11 +560,8 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_loss.setRange(xRange = (0, self.epochs))
 
     # For the presentation...
-    if self.epsilon > 0:
-        try:
-            fig_loss.addLine(y=self.target_loss, pen=pg.mkPen(color=self.target_color, width=1.5))
-        except:
-            pass
+    if self.flag_target:    
+        fig_loss.addLine(y=self.target_loss, pen=pg.mkPen(color=self.target_color, width=1.5))
 
     return fig_loss
   
