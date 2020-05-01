@@ -13,11 +13,11 @@ intitalizer_dict = {
     "truncated_normal": TruncatedNormal()
 }
 
-bias_initializer=he_uniform()
+bias_initializer=Zeros()
 
 class Strategy_Layer(tf.keras.layers.Layer):
     def __init__(self, d = None, m = None, use_batch_norm = None, \
-        kernel_initializer = "he_uniform", \
+        kernel_initializer = "zeros", \
         activation_dense = "relu", activation_output = "linear", 
         delta_constraint = None, day = None):
         super().__init__(name = "delta_" + str(day))

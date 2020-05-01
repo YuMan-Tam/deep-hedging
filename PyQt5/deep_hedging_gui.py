@@ -64,8 +64,8 @@ loss_type = "Entropy"
 use_batch_norm = False
 kernel_initializer = "he_uniform"
 
-activation_dense = "leaky_relu"
-activation_output = "sigmoid"
+activation_dense = "relu"
+activation_output = "relu"
 final_period_cost = False
 
 # Reducing learning rate
