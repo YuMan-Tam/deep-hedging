@@ -13,7 +13,7 @@ intitalizer_dict = {
     "truncated_normal": TruncatedNormal()
 }
 
-bias_initializer=Zeros()
+bias_initializer=he_uniform()
 
 class Strategy_Layer(tf.keras.layers.Layer):
     def __init__(self, d = None, m = None, use_batch_norm = None, \
@@ -76,11 +76,11 @@ class Strategy_Layer(tf.keras.layers.Layer):
                 output = Activation(self.activation_output)(output)
         
         return output
-
+    
 def Deep_Hedging_Model(N = None, d = None, m = None, \
         risk_free = None, dt = None, initial_wealth = 0.0, epsilon = 0.0, \
         final_period_cost = False, strategy_type = None, use_batch_norm = None, \
-        kernel_initializer = "zeros", \
+        kernel_initializer = "he_uniform", \
         activation_dense = "relu", activation_output = "linear", 
         delta_constraint = None, share_stretegy_across_time = False, 
         cost_structure = "proportional"):
