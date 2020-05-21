@@ -33,7 +33,7 @@ from pyqtgraph.parametertree import ParameterTree, Parameter
 from stochastic_processes import BlackScholesProcess
 from instruments import European_Call
 from deep_hedging import Deep_Hedging_Model
-from loss_metrics import Loss
+from loss_metrics import Entropy, CVaR
 from utilities import train_test_split
 from default_params import Deep_Hedging_Params
 
@@ -79,7 +79,7 @@ num_bins = 30
 
 # Need a separate threads for deep hedging algo and plot the graphs.
 class DH_Worker(QtCore.QThread):
-  DH_outputs = QtCore.pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.float32, np.float32, float, float, bool)
+  DH_outputs = QtCore.pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.float32, float, float, bool)
   def __init__(self):
     QtCore.QThread.__init__(self)
       
@@ -87,14 +87,13 @@ class DH_Worker(QtCore.QThread):
     self.wait()
       
   def run_deep_hedge_algo(self, training_dataset = None, epochs = None, Ktrain = None, batch_size = None, \
-                              model = None, submodel = None, strategy_type = None, loss_type = None, loss_param = None, learning_rate = None, xtest = None, xtrain= None, \
+                              model = None, submodel = None, strategy_type = None, loss_param = None, learning_rate = None, xtest = None, xtrain= None, \
                               initial_price_BS = None, width = None, I_range = None, x_range = None):
     self.training_dataset = training_dataset
     self.Ktrain = Ktrain
     self.batch_size = batch_size
     self.model = model
     self.submodel = submodel
-    self.loss_type = loss_type
     self.loss_param = loss_param
     self.initial_price_BS = initial_price_BS
     self.width = width
@@ -105,7 +104,7 @@ class DH_Worker(QtCore.QThread):
     self.x_range = x_range
     self.strategy_type = strategy_type
     self.learning_rate = learning_rate
-    
+
     self.start()
       
   def pause(self):
@@ -151,13 +150,12 @@ class DH_Worker(QtCore.QThread):
 
     self.reduce_lr_counter = 0
     self.early_stopping_counter = 0
+
+    certainty_equiv = tf.Variable(0.0, name = "certainty_equiv")
     
     # Accelerator Function.
     model_func = tf.function(self.model)
     submodel_func = tf.function(self.submodel)
-    
-    # Certainty equivalent variable.
-    self.certainty_equiv = tf.Variable([0.0], name = "certainty_equiv", shape=(1,), trainable=True)
     
     self.optimizer = Adam(learning_rate=self.learning_rate)
     
@@ -176,7 +174,7 @@ class DH_Worker(QtCore.QThread):
         except:
           # Reduce learning rates and Early Stopping are based on in-sample losses calculated once per epoch.
           in_sample_wealth = model_func(self.xtrain)
-          in_sample_loss = Loss(self.loss_type, in_sample_wealth, self.certainty_equiv , self.loss_param)
+          in_sample_loss = Entropy(in_sample_wealth,certainty_equiv,self.loss_param)
 
           if num_epoch >= 1:
             print("The deep-hedging price is {:0.4f} after {} epoch.".format(oos_loss, num_epoch))
@@ -186,7 +184,7 @@ class DH_Worker(QtCore.QThread):
             # emitted at the end of an epoch.
             time.sleep(1)
 
-            self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), self.certainty_equiv.numpy()[0], \
+            self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), \
                                                           num_epoch, num_batch, True)
 
             # This is needed to prevent the output signals from emitting faster than the system can plot a graph.
@@ -216,7 +214,7 @@ class DH_Worker(QtCore.QThread):
         # Record gradient
         with tf.GradientTape() as tape:
           wealth = model_func(mini_batch)
-          loss = Loss(self.loss_type, wealth, self.certainty_equiv , self.loss_param)
+          loss = Entropy(wealth, certainty_equiv, self.loss_param)
 
         oos_wealth = model_func(self.xtest)
         PnL_DH = oos_wealth.numpy().squeeze() # Out-of-sample
@@ -232,14 +230,14 @@ class DH_Worker(QtCore.QThread):
         DH_bins, _ = np.histogram(PnL_DH+self.initial_price_BS, bins = num_bins, range = self.x_range)
         
         # Forward and backward passes
-        grads = tape.gradient(loss, self.model.trainable_weights + [self.certainty_equiv])
-        self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights + [self.certainty_equiv]))
- 
+        grads = tape.gradient(loss, self.model.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
+
         # Compute Out-of-Sample Loss
-        oos_loss = Loss(self.loss_type, oos_wealth, self.certainty_equiv, self.loss_param)
+        oos_loss =  Entropy(oos_wealth, certainty_equiv, self.loss_param)
 
         if self.Figure_IsUpdated:
-          self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), self.certainty_equiv.numpy()[0], \
+          self.DH_outputs.emit(PnL_DH, DH_delta, DH_bins, oos_loss.numpy().squeeze(), \
                                                           num_epoch, num_batch, False)
           
           # This is needed to prevent the output signals from emitting faster than the system can plot a graph.
@@ -262,7 +260,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
     # The order of code is important here: Make sure the emitted signals are connected
     # before actually running the Worker.
-    self.Thread_RunDH.DH_outputs["PyQt_PyObject", "PyQt_PyObject", "PyQt_PyObject", "PyQt_PyObject", \
+    self.Thread_RunDH.DH_outputs["PyQt_PyObject", "PyQt_PyObject", "PyQt_PyObject", \
             "PyQt_PyObject", "double", "double", "bool"].connect(self.Update_Plots_Widget)
             
     # Define a top-level widget to hold everything
@@ -326,9 +324,8 @@ class MainWindow(QtWidgets.QMainWindow):
       self.sigma = self.params.param("European Call Option", "Implied Volatility").value()
       self.risk_free = self.params.param("European Call Option", "Risk-Free Rate").value()
       self.dividend = self.params.param("European Call Option", "Dividend Yield").value()
-
-      self.loss_type = self.params.param("Deep Hedging Strategy", 'Loss Function', "Loss Type").value()      
-      self.loss_param = self.params.param("Deep Hedging Strategy", 'Loss Function', "Risk Aversion").value()
+      
+      self.loss_param = self.params.param("Deep Hedging Strategy", 'Loss Function (Exponential)', "Risk Aversion").value()
       self.epsilon = self.params.param("European Call Option", "Proportional Transaction Cost", "Cost").value()
       self.d = self.params.param("Deep Hedging Strategy", "Network Structure", "Number of Hidden Layers").value()
       self.m = self.params.param("Deep Hedging Strategy", "Network Structure", "Number of Neurons").value()
@@ -354,19 +351,31 @@ class MainWindow(QtWidgets.QMainWindow):
       self.price_BS, self.delta_BS, self.PnL_BS = self.get_Black_Scholes_Prices()
 
       # Compute the loss value for Black-Scholes PnL
-      if self.loss_type == "Entropy":
-        self.loss_BS = Loss(self.loss_type, self.PnL_BS, None, self.loss_param).numpy()
-      elif self.loss_type == "CVaR":
-        # Compute CVaR (roughtly - avoid epensive optimazation like using Buehler's formula)
-        target_cutoff = np.percentile(self.PnL_BS, (1-self.loss_param)*100)
-        self.loss_BS = -self.PnL_BS[self.PnL_BS<target_cutoff].mean()
-        pass
+      self.loss_BS = Entropy(self.PnL_BS,tf.Variable(0.0),self.loss_param).numpy()
 
       # Define model and sub-models
       self.model = self.Define_DH_model()
       self.submodel = self.Define_DH_Delta_Strategy_Model()
       
       plot_height_split = (self.tree_height+1)/2
+
+      # For the presentation...
+      self.flag_target = False
+      if self.epsilon > 0:
+        try:
+          self.target_color = (0,155,0)
+          self.target_PnL = np.load("../data/target_PnL_" + str(self.epsilon) + ".npy")
+          self.target_loss = Entropy(self.target_PnL, tf.Variable(0.0), self.loss_param).numpy()
+          self.flag_target = True
+        except:
+          print("No saved file.")
+          pass
+      else:
+        try:
+            self.fig_loss.removeItem(self.DH_target_loss_textItem)
+        except:
+            pass
+
       # Add the PnL histogram (PlotWidget) - Black-Scholes vs Deep Hedging.
       self.fig_PnL = self.PnL_Hist_Widget()
       self.layout.addWidget(self.fig_PnL, 0, 3, plot_height_split, 1) 
@@ -385,9 +394,10 @@ class MainWindow(QtWidgets.QMainWindow):
       # Run the deep hedging algo in a separate thread.
       self.Thread_RunDH.run_deep_hedge_algo(training_dataset = self.training_dataset, epochs = self.epochs, \
                               Ktrain = self.Ktrain, batch_size = self.batch_size, model = self.model, \
-                              submodel = self.submodel, strategy_type = self.strategy_type, loss_type = self.loss_type, loss_param = self.loss_param, learning_rate = self.lr, \
+                              submodel = self.submodel, strategy_type = self.strategy_type, loss_param = self.loss_param, learning_rate = self.lr, \
                               xtest = self.xtest, xtrain = self.xtrain, \
                               initial_price_BS = self.price_BS[0][0], width = self.width, I_range = self.I_range, x_range = self.x_range)
+
 
   # Define action when the Pause button is clicked.
   def Pause(self):
@@ -437,7 +447,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     self.x_range = (x_min,x_max)
     self.BS_bins, self.bin_edges = np.histogram(self.PnL_BS+self.price_BS[0,0], bins = num_bins, range = self.x_range)
-    self.width = (self.bin_edges[1] - self.bin_edges[0])/2.0
+    if self.flag_target:
+        self.width = (self.bin_edges[1] - self.bin_edges[0])/3.0
+    else:
+        self.width = (self.bin_edges[1] - self.bin_edges[0])/2.0
 
     self.BS_hist = pg.BarGraphItem(x=self.bin_edges[:-2], height=self.BS_bins, width=self.width, brush='r', \
             name = "Red - Black-Scholes", antialias = False)
@@ -445,15 +458,33 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_PnL.setTitle("<font size='5'>Profit and Loss (PnL) Histogram</font>")
     fig_PnL.setLabels(left="<font size='4'>Frequency</font>", bottom="<font size='4'>Profit and Loss (PnL) </font>")
 
-    fig_PnL_text = \
-        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark)</span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>", \
-        anchor=(0,0), angle=0, border='w', fill=(225, 225, 200))
-    fig_PnL_text.setPos(self.bin_edges.min()*1.35,self.BS_bins.max()*1.05)
-
     # Fix the problem that Y-axes keep moving when transactioni cost is greater than zero.
     fig_PnL.setYRange(0,self.BS_bins.max()*1.1)
+
+    if self.flag_target:
+        fig_PnL.setXRange(self.bin_edges.min(), 2)
+    else:
+        fig_PnL.setXRange(self.bin_edges.min(), 2)
     
     fig_PnL.addItem(self.BS_hist)
+
+    if self.flag_target:
+        self.DH_target_bins, _ = np.histogram(self.target_PnL +self.price_BS[0,0], bins = num_bins, range = self.x_range)
+        self.DH_target_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+2*self.width, height=self.DH_target_bins, width=self.width, brush=self.target_color, \
+                name = "Green - Deep-Hedging PnL (Target)", antialias = False)
+        fig_PnL.addItem(self.DH_target_hist)
+        PnL_html = "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark) </span><br>" + \
+                            "<span style='color: rgb{}; ;'>Deep-Hedging PnL (Target) </span><br>".format(str(self.target_color)) +  \
+                            "<span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>"
+    else:
+        PnL_html =  "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes PnL (Benchmark) </span><br>" + \
+                            "<span style='color: rgb(0,0,255); ;'>Deep-Hedging PnL </span></div>"
+
+    fig_PnL_text = pg.TextItem(html=PnL_html, anchor=(0,0), angle=0, border='w', fill=(225, 225, 200))
+    
+
+
+    fig_PnL_text.setPos(self.bin_edges.min(),self.BS_bins.max()*1.05)
     fig_PnL.addItem(fig_PnL_text)
 
     return fig_PnL
@@ -491,7 +522,7 @@ class MainWindow(QtWidgets.QMainWindow):
     fig_delta.setLabels(left="<font size='4'>Delta</font>", bottom="<font size='4'>Stock Price</font>")
 
     fig_delta_text = \
-        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Delta (Benchmark)</span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging Delta </span></div>", \
+        pg.TextItem(html="<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Delta (Benchmark) </span><br><span style='color: rgb(0,0,255); ;'>Deep-Hedging Delta </span></div>", \
         anchor=(0,0), angle=0, border='w', fill=(255, 255, 200))
     fig_delta_text.setPos(self.S_range.min(),self.model_delta.max())
 
@@ -512,8 +543,14 @@ class MainWindow(QtWidgets.QMainWindow):
     # Add a line for the Black-Scholes price.
     fig_loss.addLine(y=self.loss_BS, pen=pg.mkPen(color="r", width=1.5))
 
-    self.BS_loss_html = "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Loss (Benchmark)</span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.loss_BS)
+    self.BS_loss_html = "<div align='center'><span style='color: rgb(255,0,0);'>Black-Scholes Loss (Benchmark) </span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.loss_BS)
     self.BS_loss_textItem = pg.TextItem(html=self.BS_loss_html, anchor=(1,1), angle=0, border='w', fill=(255,255,200))
+
+    if self.flag_target:
+        self.DH_target_loss_html = "<div align='center'><span style='color: rgb" + str(self.target_color) + \
+                    ";'>Deep-Hedging Loss (Target) </span><br><span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>".format(self.target_loss)
+        self.DH_target_loss_textItem = pg.TextItem(html=self.DH_target_loss_html, anchor=(1,1), angle=0, border='w', fill=(255,255,200))
+
     
     # Label the graph.
     fig_loss.setTitle("<font size='5'> Loss Function (Option Price) </font>")
@@ -522,30 +559,42 @@ class MainWindow(QtWidgets.QMainWindow):
     # Set appropriate xRange and yRange.
     fig_loss.setRange(xRange = (0, self.epochs))
 
+    # For the presentation...
+    if self.flag_target:    
+        fig_loss.addLine(y=self.target_loss, pen=pg.mkPen(color=self.target_color, width=1.5))
+
     return fig_loss
   
   # Update Plots - Black-Scholes vs Deep Hedging.
   def Update_Plots_Widget(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
-                                                          loss = None, certainty_equiv = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
+                                                          loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
 
-    self.Update_PnL_Histogram(PnL_DH, DH_delta, DH_bins, loss, certainty_equiv, num_epoch, num_batch, flag_last_batch_in_epoch)
-    self.Update_Delta_Plot(PnL_DH, DH_delta, DH_bins, loss, certainty_equiv, num_epoch, num_batch, flag_last_batch_in_epoch)
-    self.Update_Loss_Plot(PnL_DH, DH_delta, DH_bins, loss, certainty_equiv, num_epoch, num_batch, flag_last_batch_in_epoch)
+    self.Update_PnL_Histogram(PnL_DH, DH_delta, DH_bins, loss, num_epoch, num_batch, flag_last_batch_in_epoch)
+    self.Update_Delta_Plot(PnL_DH, DH_delta, DH_bins, loss, num_epoch, num_batch, flag_last_batch_in_epoch)
+    self.Update_Loss_Plot(PnL_DH, DH_delta, DH_bins, loss, num_epoch, num_batch, flag_last_batch_in_epoch)
       
     self.Thread_RunDH.Figure_IsUpdated = True
 
+    if num_epoch == self.epochs and flag_last_batch_in_epoch is True and self.epsilon > 0.0:
+        np.save("../data/target_PnL_" + str(self.epsilon), PnL_DH)
+
   def Update_Loss_Plot(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
-                                                          loss = None, certainty_equiv = None, \
-                                                          num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
+                                                          loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
+    
+    DH_shift = 0.6
+
     # Get the latest viewRange
     yMin_View, yMax_View = self.fig_loss.viewRange()[1]
 
     # Update text position for Black-Scholes
-    self.BS_loss_textItem.setPos(self.epochs*0.9,self.loss_BS + (yMax_View - self.loss_BS)*0.005)
+    self.BS_loss_textItem.setPos(self.epochs*0.8,self.loss_BS + (yMax_View - self.loss_BS)*0.005)
+
+    if self.flag_target:
+        self.DH_target_loss_textItem.setPos(self.epochs*0.6,self.target_loss + (yMax_View - self.target_loss)*0.005)
 
     # Update text for Deep-Hedging.
     DH_loss_text_title = "<div align='center'><span style='color: rgb(0,0,255);'>Deep-Hedging Loss</span><br>"
-    DH_loss_text_step = "<span style='color: rgb(34,139,34);'> Epoch: {} Batch: {}</span><br>"
+    DH_loss_text_step = "<span style='color: rgb(0,0,0);'> Epoch: {} Batch: {}</span><br>"
     DH_loss_text_loss = "<span style='color: rgb(0,0,0); font-size: 16pt;'>{:0.3f}</span></div>"
 
     DH_loss_text_str = (DH_loss_text_title + DH_loss_text_step + DH_loss_text_loss).format(int(num_epoch), int(num_batch), loss)
@@ -553,9 +602,12 @@ class MainWindow(QtWidgets.QMainWindow):
     if num_epoch ==1 and num_batch == 1:
       self.fig_loss.addItem(self.BS_loss_textItem)
 
+      if self.flag_target:
+        self.fig_loss.addItem(self.DH_target_loss_textItem)
+
       # Setup the textbox for the deep-hedging loss.
       self.DH_loss_textItem = pg.TextItem(html= DH_loss_text_str, anchor=(0,0), angle=0, border='w', fill=(255,255,200))
-      self.DH_loss_textItem.setPos(num_epoch-1,loss)
+      self.DH_loss_textItem.setPos((num_epoch-1) + DH_shift,loss)
       self.fig_loss.addItem(self.DH_loss_textItem)
 
       self.fig_loss.enableAutoRange()
@@ -566,7 +618,7 @@ class MainWindow(QtWidgets.QMainWindow):
     else:
       self.DH_loss_textItem.setHtml(DH_loss_text_str)
       if flag_last_batch_in_epoch:
-        self.DH_loss_textItem.setPos(num_epoch,loss)
+        self.DH_loss_textItem.setPos(num_epoch + DH_shift,loss)
         if num_epoch == 1:
           # Establish the data for the out-of-sample loss at the end of the first epoch.
           self.oos_loss_record = np.array([num_epoch, loss],ndmin=2)
@@ -590,8 +642,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
   def Update_PnL_Histogram(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
-                                                          loss = None, certainty_equiv = None, \
-                                                          num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
+                                                          loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
     if num_epoch == 1 and num_batch == 1:
       # Update PnL Histogram
       self.DH_hist = pg.BarGraphItem(x=self.bin_edges[:-2]+self.width, height=DH_bins, width=self.width, brush='b', \
@@ -602,8 +653,7 @@ class MainWindow(QtWidgets.QMainWindow):
       self.DH_hist.setOpts(height=DH_bins)
 
   def Update_Delta_Plot(self, PnL_DH = None, DH_delta = None, DH_bins = None, \
-                                                          loss = None, certainty_equiv = None, \
-                                                          num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
+                                                          loss = None, num_epoch = None, num_batch = None, flag_last_batch_in_epoch = None):
     if num_epoch == 1 and num_batch == 1:
       # Update the Delta plot
       self.DH_delta_plot = pg.PlotDataItem(symbolBrush=(0,0,255), symbolPen='b', symbol='+', symbolSize=10, name = "Deep Hedging")
