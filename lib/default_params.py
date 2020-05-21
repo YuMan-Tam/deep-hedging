@@ -19,7 +19,8 @@ def Deep_Hedging_Params():
 					]},
 			]},
 			{'name': 'Deep Hedging Strategy', 'type': 'group', 'children': [
-					{'name': 'Loss Function (Exponential)', 'type': 'group', 'children': [
+					{'name': 'Loss Function', 'type': 'group', 'children': [
+            {'name': 'Loss Type', 'type': 'list', 'values': {"Entropy": "Entropy", "CVaR": "CVaR"}, "default": "Entropy"},
             {'name': 'Risk Aversion', 'type': 'float', 'value': 1.0}
 					]},
 					{'name': 'Network Structure', 'type': 'group', 'children': [
