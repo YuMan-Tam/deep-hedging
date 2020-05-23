@@ -4,7 +4,7 @@ from scipy import stats
 from stochastic_processes import BlackScholesProcess
 
 # Assume continuous dividend with flat term-structure and flat dividend structure.
-class European_Call:
+class EuropeanCall:
 	def __init__(self):
 		pass
 		

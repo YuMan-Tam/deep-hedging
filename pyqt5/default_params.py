@@ -1,5 +1,5 @@
 # Define the initial parameters for the deep hedging demo
-def Deep_Hedging_Params():
+def DeepHedgingParams():
 	params = [
 			{'name': 'European Call Option', 'type': 'group', 'children': [
 					{'name': 'S0', 'type': 'int', 'value': 100.0},
