@@ -1,5 +1,3 @@
 # Deep Hedging Demo
 
-Python code to replicate the Deep Hedging paper by Buehler et al (2019, Quantitative Finance).
-
-For first-time user, please use the Colab version.
+This code uses neural networks for derivative hedging by applying the methodlogy from the paper "Deep Hedging" (Buehler, et al, Quantitative Finance, 2019). 
