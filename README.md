@@ -3,6 +3,10 @@
 
 ![Image of Demo](https://user-images.githubusercontent.com/7247589/99870023-ca5ec380-2b9d-11eb-8646-4e78ad87f8ad.png)
 
+``` 1) Run deep_hedging_colab.ipynb on Colab using the Jupyter notebook in the colab folder. ```
+
+``` 2) Run main.py in the pyqt folder for the gui.  See the required dependencies in requirements.txt.```
+
 The Black-Scholes (BS) model – developed in 1973 and based on Nobel Prize winning works – has been the de-facto standard for pricing options and other financial derivatives for nearly half a century. The model can be used, under the assumption of a perfect financial market, to calculate an options price and the associated risk sensitivities. These risk sensitivities can then be theoretically used by a trader to create a perfect hedging strategy that eliminates all risks in a portfolio of options. However, the necessary conditions for a perfect financial market, such as zero transaction cost and the possibility of continuous trading, are difficult to meet in the real world. Therefore, in practice, banks have to rely on their traders’ intuition and experience to augment the BS model hedges with manual adjustments to account for these market imperfections.
 The derivative desks of every bank all hedge their positions, and their PnL and risk exposure depend crucially on the quality of their hedges. If their hedges does not properly account for market imperfections, banks might underestimate the true risk exposure of their portfolios. On the other hand, if their hedges overestimate the cost of market imperfections, banks might overprice their positions (relative to their competitors) and hence risk losing trades and/or customers. Over the last few decades, the financial market has become increasingly sophisticated. Intuition and experience of traders might not be sufficiently fast and accurate to compute the impact of market imperfections on their portfolios and to come up with good manual adjustments to their BS model hedges. 
 
