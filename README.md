@@ -11,6 +11,6 @@ Machine learning algorithms are often referred to as “black boxes” because o
 
 **References:**
 
-Risk.net (2019), “Deep hedging and the end of the Black-Scholes era.”
+Risk.net, (2019). “Deep hedging and the end of the Black-Scholes era.”
 
-Hans Buhler et al, 2019. “Deep Hedging.” Quantitative Finance, 19(8).
+Hans Buhler et al, (2019). “Deep Hedging.” Quantitative Finance, 19(8).
