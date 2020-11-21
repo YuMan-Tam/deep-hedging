@@ -1,4 +1,4 @@
-# Deep Hedging (Buhler et al, 2019) Demo
+# Deep Hedging Demo
 ## Pricing Derivatives using Machine Learning
 
 ![Image of Demo](https://user-images.githubusercontent.com/7247589/99870023-ca5ec380-2b9d-11eb-8646-4e78ad87f8ad.png)
