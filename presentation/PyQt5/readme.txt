@@ -1,0 +1,1 @@
+In presentation, run cost = 0 and 0.015.
